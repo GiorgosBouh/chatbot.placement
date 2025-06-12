@@ -23,20 +23,32 @@ st.markdown("""
     }
     
     .main-header {
-        text-align: center;
         color: #1f4e79;
         font-size: 2.2rem;
         font-weight: 600;
         margin-bottom: 0.5rem;
         border-bottom: 2px solid #e8f4f8;
         padding-bottom: 1rem;
+        margin-top: 1rem;
     }
     
     .sub-header {
-        text-align: center;
         color: #6c757d;
         font-size: 1.1rem;
         margin-bottom: 2rem;
+    }
+    
+    .logo-container {
+        display: flex;
+        align-items: center;
+        margin-bottom: 2rem;
+        padding: 1rem 0;
+        border-bottom: 1px solid #e8f4f8;
+    }
+    
+    .logo-container img {
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     
     .user-message {
@@ -79,13 +91,20 @@ st.markdown("""
         transition: all 0.3s ease;
     }
     
+    /* Κρύψιμο Streamlit elements */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     
+    /* Κρύψιμο τυχόν κατηγοριών από παλαιότερες εκδόσεις */
+    .categories-section {display: none !important;}
+    .element-container:has(.categories) {display: none !important;}
+    div[data-testid="stSidebar"] div:contains("Κατηγορίες") {display: none !important;}
+    
     @media (max-width: 768px) {
         .main-header { font-size: 1.8rem; }
         .sub-header { font-size: 1rem; }
+        .logo-container img { max-width: 120px; }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -175,7 +194,7 @@ class PracticeTrainingChatbot:
                 "id": 1,
                 "category": "Γενικές Πληροφορίες",
                 "question": "Πώς ξεκινάω την πρακτική μου άσκηση;",
-                "answer": "Για να ξεκινήσετε την πρακτική σας άσκηση, επικοινωνήστε με τον υπεύθυνο Γιώργο Σοφιανίδη (gsofianidis@mitropolitiko.edu.gr). Πρέπει να συμπληρώσετε 240 ώρες πρακτικής άσκησης σε δομή της επιλογής σας.",
+                "answer": "Για να ξεκινήσετε την πρακτική σας άσκηση, επικοινωνήστε με τον υπεύθυνο Γεώργιο Σοφιανίδη (gsofianidis@mitropolitiko.edu.gr). Πρέπει να συμπληρώσετε 240 ώρες πρακτικής άσκησης σε δομή της επιλογής σας.",
                 "keywords": ["ξεκινάω", "πρακτική", "άσκηση", "αρχή", "πώς"]
             }
         ]
@@ -313,10 +332,10 @@ class PracticeTrainingChatbot:
         
         if topic_scores.get(max_topic, 0) > 0:
             topic_responses = {
-                'contact': "Για αυτή την ερώτηση, παρακαλώ επικοινωνήστε απευθείας με τον υπεύθυνο **Γιώργο Σοφιανίδη** στο gsofianidis@mitropolitiko.edu.gr",
-                'documents': "Σχετικά με τα έγγραφα, επικοινωνήστε με τον **Γιώργο Σοφιανίδη** (gsofianidis@mitropolitiko.edu.gr) για λεπτομερείς οδηγίες.",
-                'hours': "Για ερωτήσεις σχετικά με τις ώρες και τα χρονοδιαγράμματα, επικοινωνήστε με τον **Γιώργο Σοφιανίδη** στο gsofianidis@mitropolitiko.edu.gr",
-                'insurance': "Για θέματα ασφαλιστικής ικανότητας, δοκιμάστε πρώτα το gov.gr ή επικοινωνήστε με τον **Γιώργο Σοφιανίδη** (gsofianidis@mitropolitiko.edu.gr)."
+                'contact': "Για αυτή την ερώτηση, παρακαλώ επικοινωνήστε απευθείας με τον υπεύθυνο **Γεώργιο Σοφιανίδη** στο gsofianidis@mitropolitiko.edu.gr",
+                'documents': "Σχετικά με τα έγγραφα, επικοινωνήστε με τον **Γεώργιο Σοφιανίδη** (gsofianidis@mitropolitiko.edu.gr) για λεπτομερείς οδηγίες.",
+                'hours': "Για ερωτήσεις σχετικά με τις ώρες και τα χρονοδιαγράμματα, επικοινωνήστε με τον **Γεώργιο Σοφιανίδη** στο gsofianidis@mitropolitiko.edu.gr",
+                'insurance': "Για θέματα ασφαλιστικής ικανότητας, δοκιμάστε πρώτα το gov.gr ή επικοινωνήστε με τον **Γεώργιο Σοφιανίδη** (gsofianidis@mitropolitiko.edu.gr)."
             }
             
             if max_topic in topic_responses:
@@ -325,7 +344,7 @@ class PracticeTrainingChatbot:
         # Έλεγχος για λέξεις επικοινωνίας
         contact_words = ['επικοινωνία', 'τηλέφωνο', 'email', 'μαιλ', 'πού', 'ποιος', 'υπεύθυνος']
         if any(word in processed_question for word in contact_words):
-            return "Ο υπεύθυνος για την πρακτική άσκηση είναι ο **Γιώργος Σοφιανίδης**. Μπορείτε να τον επικοινωνήσετε στο gsofianidis@mitropolitiko.edu.gr"
+            return "Ο υπεύθυνος για την πρακτική άσκηση είναι ο **Γεώργιος Σοφιανίδης**. Μπορείτε να τον επικοινωνήσετε στο gsofianidis@mitropolitiko.edu.gr"
         
         # Γενική απάντηση
         return """Δεν βρήκα συγκεκριμένη απάντηση για αυτή την ερώτηση. 
@@ -333,7 +352,7 @@ class PracticeTrainingChatbot:
 **Προτείνω:**
 • Δοκιμάστε να αναδιατυπώσετε την ερώτηση με διαφορετικές λέξεις
 • Επιλέξτε από τις συχνές ερωτήσεις στο sidebar
-• Επικοινωνήστε με τον **Γιώργο Σοφιανίδη**: gsofianidis@mitropolitiko.edu.gr"""
+• Επικοινωνήστε με τον **Γεώργιο Σοφιανίδη**: gsofianidis@mitropolitiko.edu.gr"""
     
     def get_response(self, question: str) -> Dict:
         """Κύρια μέθοδος για απάντηση"""
@@ -366,9 +385,23 @@ def main():
     if 'messages' not in st.session_state:
         st.session_state.messages = []
     
-    # Header
-    st.markdown('<h1 class="main-header">Πρακτική Άσκηση</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-header">Μητροπολιτικό Κολλέγιο Θεσσαλονίκης • Προπονητική & Φυσική Αγωγή</p>', unsafe_allow_html=True)
+    # Header με logo
+    st.markdown('<div class="logo-container">', unsafe_allow_html=True)
+    
+    logo_col, title_col = st.columns([1, 4])
+    
+    with logo_col:
+        try:
+            st.image("https://raw.githubusercontent.com/GiorgosBouh/chatbot.placement/main/MK_LOGO_SEO_1200x630.png", width=140)
+        except:
+            # Fallback αν το logo δεν φορτώνει
+            st.markdown("🎓", unsafe_allow_html=True)
+    
+    with title_col:
+        st.markdown('<h1 class="main-header">Πρακτική Άσκηση</h1>', unsafe_allow_html=True)
+        st.markdown('<p class="sub-header">Μητροπολιτικό Κολλέγιο Θεσσαλονίκης • Προπονητική & Φυσική Αγωγή</p>', unsafe_allow_html=True)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
     
     # Layout με στήλες
     col1, col2, col3 = st.columns([1, 3, 1])
@@ -405,7 +438,8 @@ def main():
                 </div>
                 """, unsafe_allow_html=True)
         
-        st.markdown("<br>", unsafe_allow_html=True)
+        # Βελτιωμένο header styling
+        st.markdown('<div style="margin-bottom: 2rem;"></div>', unsafe_allow_html=True)
         
         # Chat Interface
         for message in st.session_state.messages:
@@ -485,7 +519,7 @@ def main():
         
         st.markdown("""
         **Υπεύθυνος Πρακτικής Άσκησης**  
-        **Γιώργος Σοφιανίδης**  
+        **Γεώργιος Σοφιανίδης**  
         📧 gsofianidis@mitropolitiko.edu.gr
         """)
         
@@ -515,7 +549,7 @@ def main():
         
         st.markdown("---")
         
-        st.markdown("## 🔗 Χρήσιμοι Σύνδεσμοι")
+        st.markdown("## 🔗 Χρήσιμοι Σύνδεσμοι1")
         st.link_button("🏛️ Ασφαλιστική Ικανότητα", "https://www.gov.gr/ipiresies/ergasia-kai-asphalise/asphalise/asphalistike-ikanoteta")
         st.link_button("📋 ATLAS", "https://www.atlas.gov.gr/ATLAS/Pages/Home.aspx")
         st.link_button("📑 Υπεύθυνη Δήλωση", "https://www.gov.gr")
@@ -533,7 +567,7 @@ def main():
         st.markdown("""
         <div style="text-align: center; color: #6c757d; font-size: 0.9rem; padding: 2rem 0; border-top: 1px solid #e9ecef;">
             Μητροπολιτικό Κολλέγιο Θεσσαλονίκης • Τμήμα Προπονητικής & Φυσικής Αγωγής<br>
-            <small>Για τεχνική υποστήριξη επικοινωνήστε με τον Γιώργο Σοφιανίδη</small>
+            <small>Για τεχνική υποστήριξη επικοινωνήστε με τον Γεώργιο Σοφιανίδη</small>
         </div>
         """, unsafe_allow_html=True)
 
