@@ -23,160 +23,83 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Professional CSS με modern design
+# Professional CSS με typing animation
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    
-    * {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    }
-    
     .main {
-        padding-top: 1rem;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        min-height: 100vh;
-    }
-    
-    .main-container {
-        background: rgba(255, 255, 255, 0.95);
-        backdrop-filter: blur(20px);
-        border-radius: 20px;
-        padding: 2rem;
-        margin: 1rem 0;
-        box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-        border: 1px solid rgba(255,255,255,0.2);
+        padding-top: 2rem;
     }
     
     .main-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        font-size: 2.8rem;
-        font-weight: 700;
+        color: #1f4e79;
+        font-size: 2.2rem;
+        font-weight: 600;
         margin-bottom: 0.5rem;
-        text-align: center;
-        letter-spacing: -0.02em;
+        border-bottom: 2px solid #e8f4f8;
+        padding-bottom: 1rem;
+        margin-top: 1rem;
     }
     
     .sub-header {
-        color: #64748b;
-        font-size: 1.2rem;
+        color: #6c757d;
+        font-size: 1.1rem;
         margin-bottom: 2rem;
-        text-align: center;
-        font-weight: 500;
     }
     
     .logo-container {
         display: flex;
         align-items: center;
-        justify-content: center;
         margin-bottom: 2rem;
-        padding: 2rem 0;
-        background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
-        border-radius: 20px;
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255,255,255,0.1);
+        padding: 1rem 0;
+        border-bottom: 1px solid #e8f4f8;
     }
     
     .logo-container img {
-        border-radius: 16px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        transition: transform 0.3s ease;
-    }
-    
-    .logo-container img:hover {
-        transform: scale(1.05);
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     
     .user-message {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        padding: 1.5rem;
-        border-radius: 20px;
-        margin: 1.5rem 0;
-        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .user-message::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%);
-        transform: translateX(-100%);
-        transition: transform 0.6s;
-    }
-    
-    .user-message:hover::before {
-        transform: translateX(100%);
+        background: #f8f9fa;
+        border-left: 4px solid #1f4e79;
+        padding: 1rem;
+        border-radius: 8px;
+        margin: 1rem 0;
     }
     
     .bot-message {
-        background: rgba(255, 255, 255, 0.9);
-        backdrop-filter: blur(20px);
-        border: 1px solid rgba(255,255,255,0.2);
-        border-left: 4px solid #10b981;
-        padding: 1.5rem;
-        border-radius: 20px;
-        margin: 1.5rem 0;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-    
-    .bot-message:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 15px 40px rgba(0,0,0,0.15);
+        background: #ffffff;
+        border: 1px solid #e9ecef;
+        border-left: 4px solid #28a745;
+        padding: 1rem;
+        border-radius: 8px;
+        margin: 1rem 0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
     
     .ai-message {
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
         border: none;
-        padding: 1.5rem;
-        border-radius: 20px;
-        margin: 1.5rem 0;
-        box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3);
-        position: relative;
-        overflow: hidden;
+        border-left: 4px solid #4caf50;
+        padding: 1rem;
+        border-radius: 8px;
+        margin: 1rem 0;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
     }
     
-    .ai-message::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%);
-        transform: translateX(-100%);
-        transition: transform 0.6s;
-    }
-    
-    .ai-message:hover::before {
-        transform: translateX(100%);
-    }
-    
-    .confidence-high { border-left-color: #10b981 !important; }
-    .confidence-medium { border-left-color: #f59e0b !important; }
-    .confidence-low { border-left-color: #ef4444 !important; }
+    .confidence-high { border-left-color: #28a745 !important; }
+    .confidence-medium { border-left-color: #ffc107 !important; }
+    .confidence-low { border-left-color: #dc3545 !important; }
     
     .typing-indicator {
-        background: rgba(255, 255, 255, 0.9);
-        backdrop-filter: blur(20px);
-        border: 1px solid rgba(255,255,255,0.2);
-        border-radius: 20px;
-        padding: 1.5rem;
-        margin: 1.5rem 0;
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 1rem 0;
         display: flex;
         align-items: center;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
     }
     
     .typing-dots {
@@ -189,7 +112,7 @@ st.markdown("""
         width: 8px;
         height: 8px;
         border-radius: 50%;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background-color: #999;
         margin: 0 2px;
         animation: typing 1.4s infinite ease-in-out;
     }
@@ -203,174 +126,31 @@ st.markdown("""
     }
     
     .info-card {
-        background: rgba(255, 255, 255, 0.9);
-        backdrop-filter: blur(20px);
-        border: 1px solid rgba(255,255,255,0.2);
-        border-radius: 16px;
+        background: #ffffff;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
         padding: 1.5rem;
         margin: 1rem 0;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .info-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
-        opacity: 0;
-        transition: opacity 0.3s ease;
-    }
-    
-    .info-card:hover::before {
-        opacity: 1;
-    }
-    
-    .info-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 20px 40px rgba(0,0,0,0.15);
-    }
-    
-    .quick-stats {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 1rem;
-        margin: 2rem 0;
-    }
-    
-    .stat-card {
-        background: rgba(255, 255, 255, 0.9);
-        backdrop-filter: blur(20px);
-        border: 1px solid rgba(255,255,255,0.2);
-        border-radius: 16px;
-        padding: 1.5rem;
-        text-align: center;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-        transition: all 0.3s ease;
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .stat-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-        opacity: 0;
-        transition: opacity 0.3s ease;
-    }
-    
-    .stat-card:hover::before {
-        opacity: 1;
-    }
-    
-    .stat-card:hover {
-        transform: translateY(-5px) scale(1.02);
-        box-shadow: 0 20px 40px rgba(0,0,0,0.2);
-    }
-    
-    .stat-number {
-        font-size: 2rem;
-        font-weight: 700;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        margin: 0;
-    }
-    
-    .stat-label {
-        color: #64748b;
-        font-size: 0.9rem;
-        font-weight: 500;
-        margin-top: 0.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
     
     .api-status {
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        background: linear-gradient(45deg, #4caf50, #45a049);
         color: white;
-        padding: 0.8rem 1.5rem;
-        border-radius: 25px;
-        font-size: 0.9rem;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
         display: inline-block;
         margin-bottom: 1rem;
-        box-shadow: 0 5px 15px rgba(16, 185, 129, 0.3);
-        animation: pulse 2s infinite;
-    }
-    
-    @keyframes pulse {
-        0% { box-shadow: 0 5px 15px rgba(16, 185, 129, 0.3); }
-        50% { box-shadow: 0 5px 25px rgba(16, 185, 129, 0.5); }
-        100% { box-shadow: 0 5px 15px rgba(16, 185, 129, 0.3); }
-    }
-    
-    .stTextInput > div > div > input {
-        background: rgba(255, 255, 255, 0.9);
-        backdrop-filter: blur(20px);
-        border: 1px solid rgba(255,255,255,0.2);
-        border-radius: 15px;
-        padding: 1rem 1.5rem;
-        font-size: 1rem;
-        transition: all 0.3s ease;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-    }
-    
-    .stTextInput > div > div > input:focus {
-        border-color: #667eea;
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        transform: translateY(-1px);
     }
     
     .stButton > button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        border-radius: 15px;
-        padding: 1rem 2rem;
-        font-weight: 600;
-        font-size: 1rem;
-        transition: all 0.3s ease;
-        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
         width: 100%;
-    }
-    
-    .stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
-    }
-    
-    .stButton > button:active {
-        transform: translateY(0);
-    }
-    
-    /* Sidebar styling */
-    .css-1d391kg {
-        background: rgba(255, 255, 255, 0.95);
-        backdrop-filter: blur(20px);
-    }
-    
-    .sidebar-card {
-        background: rgba(255, 255, 255, 0.8);
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255,255,255,0.2);
-        border-radius: 12px;
-        padding: 1rem;
-        margin: 0.5rem 0;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        transition: all 0.2s ease;
-    }
-    
-    .sidebar-card:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+        border-radius: 6px;
+        border: none;
+        padding: 0.6rem 1.2rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
     }
     
     /* Κρύψιμο Streamlit elements */
@@ -378,49 +158,10 @@ st.markdown("""
     footer {visibility: hidden;}
     header {visibility: hidden;}
     
-    /* Responsive */
     @media (max-width: 768px) {
-        .main-header { font-size: 2.2rem; }
+        .main-header { font-size: 1.8rem; }
         .sub-header { font-size: 1rem; }
         .logo-container img { max-width: 120px; }
-        .stat-card { padding: 1rem; }
-        .info-card { padding: 1rem; }
-        .user-message, .bot-message, .ai-message { padding: 1rem; margin: 1rem 0; }
-    }
-    
-    /* Dark elements */
-    .dark-card {
-        background: rgba(30, 30, 30, 0.9);
-        color: white;
-        backdrop-filter: blur(20px);
-        border: 1px solid rgba(255,255,255,0.1);
-    }
-    
-    /* Glass effect */
-    .glass {
-        background: rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(20px);
-        border: 1px solid rgba(255,255,255,0.2);
-        border-radius: 20px;
-    }
-    
-    /* Success/Warning indicators */
-    .success-indicator {
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-        color: white;
-        padding: 0.5rem 1rem;
-        border-radius: 20px;
-        font-size: 0.8rem;
-        display: inline-block;
-    }
-    
-    .warning-indicator {
-        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-        color: white;
-        padding: 0.5rem 1rem;
-        border-radius: 20px;
-        font-size: 0.8rem;
-        display: inline-block;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -701,45 +442,39 @@ def main():
     col1, col2, col3 = st.columns([1, 3, 1])
 
     with col2:
-        # Quick Stats με νέο styling
-        st.markdown('<div class="quick-stats">', unsafe_allow_html=True)
-        
-        stat_col1, stat_col2, stat_col3 = st.columns(3)
-        
-        with stat_col1:
-            st.markdown("""
-            <div class="stat-card">
-                <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📅</div>
-                <div class="stat-number">240</div>
-                <div class="stat-label">Ώρες Πρακτικής</div>
-                <div style="font-size: 0.8rem; color: #64748b; margin-top: 0.5rem;">μέχρι 30 Απριλίου</div>
-            </div>
-            """, unsafe_allow_html=True)
+        # Quick Info Cards
+        with st.container():
+            quick_col1, quick_col2, quick_col3 = st.columns(3)
 
-        with stat_col2:
-            st.markdown("""
-            <div class="stat-card">
-                <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📋</div>
-                <div class="stat-number">Moodle</div>
-                <div class="stat-label">Σύμβαση</div>
-                <div style="font-size: 0.8rem; color: #64748b; margin-top: 0.5rem;">ανέβασμα μέχρι 15/10</div>
-            </div>
-            """, unsafe_allow_html=True)
+            with quick_col1:
+                st.markdown("""
+                <div class="info-card" style="text-align: center;">
+                    <h4 style="color: #1f4e79; margin-bottom: 0.5rem;">📅 Ώρες</h4>
+                    <p style="font-size: 1.2rem; font-weight: 600; color: #28a745; margin: 0;">240 ώρες</p>
+                    <small style="color: #6c757d;">μέχρι 30/4</small>
+                </div>
+                """, unsafe_allow_html=True)
 
-        with stat_col3:
-            st.markdown("""
-            <div class="stat-card">
-                <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">⏰</div>
-                <div class="stat-number">Δε-Σα</div>
-                <div class="stat-label">Ωράριο</div>
-                <div style="font-size: 0.8rem; color: #64748b; margin-top: 0.5rem;">μέχρι 8 ώρες/ημέρα</div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
+            with quick_col2:
+                st.markdown("""
+                <div class="info-card" style="text-align: center;">
+                    <h4 style="color: #1f4e79; margin-bottom: 0.5rem;">📋 Σύμβαση</h4>
+                    <p style="font-size: 1.2rem; font-weight: 600; color: #ffc107; margin: 0;">Moodle</p>
+                    <small style="color: #6c757d;">μέχρι 15/10</small>
+                </div>
+                """, unsafe_allow_html=True)
 
-        # Chat Interface με βελτιωμένο styling
-        st.markdown('<div style="margin: 2rem 0;"></div>', unsafe_allow_html=True)
+            with quick_col3:
+                st.markdown("""
+                <div class="info-card" style="text-align: center;">
+                    <h4 style="color: #1f4e79; margin-bottom: 0.5rem;">⏰ Ωράριο</h4>
+                    <p style="font-size: 1.2rem; font-weight: 600; color: #17a2b8; margin: 0;">Δε-Σα</p>
+                    <small style="color: #6c757d;">μέχρι 8ω/ημέρα</small>
+                </div>
+                """, unsafe_allow_html=True)
+
+        # Βελτιωμένο header styling
+        st.markdown('<div style="margin-bottom: 2rem;"></div>', unsafe_allow_html=True)
 
         # Chat Interface
         for message in st.session_state.messages:
@@ -838,26 +573,20 @@ def main():
 
             st.rerun()
 
-    # Sidebar με νέο styling
+    # Sidebar
     with st.sidebar:
-        # Contact Card
-        st.markdown("""
-        <div class="sidebar-card">
-            <h3 style="color: #667eea; margin-bottom: 1rem; font-size: 1.1rem;">📞 Επικοινωνία</h3>
-            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 1rem; border-radius: 10px;">
-                <strong>Υπεύθυνος Πρακτικής Άσκησης</strong><br>
-                <strong>Γεώργιος Σοφιανίδης</strong><br>
-                <span style="opacity: 0.9;">📧 gsofianidis@mitropolitiko.edu.gr</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown("## 📞 Επικοινωνία")
 
-        # FAQ Section
         st.markdown("""
-        <div class="sidebar-card">
-            <h3 style="color: #667eea; margin-bottom: 1rem; font-size: 1.1rem;">❓ Συχνές Ερωτήσεις</h3>
-        </div>
-        """, unsafe_allow_html=True)
+        **Υπεύθυνος Πρακτικής Άσκησης**  
+        **Γεώργιος Σοφιανίδης**  
+        📧 gsofianidis@mitropolitiko.edu.gr
+        """)
+
+        st.markdown("---")
+
+        # Συχνές ερωτήσεις
+        st.markdown("## ❓ Συχνές Ερωτήσεις")
 
         for question in st.session_state.chatbot.frequent_questions:
             if st.button(question, key=f"faq_{question}", use_container_width=True):
@@ -879,99 +608,49 @@ def main():
 
                 st.rerun()
 
-        # Links Section
-        st.markdown("""
-        <div class="sidebar-card">
-            <h3 style="color: #667eea; margin-bottom: 1rem; font-size: 1.1rem;">🔗 Χρήσιμοι Σύνδεσμοι</h3>
-        </div>
-        """, unsafe_allow_html=True)
-        
+        st.markdown("---")
+
+        st.markdown("## 🔗 Χρήσιμοι Σύνδεσμοι")
         st.link_button("🏛️ Ασφαλιστική Ικανότητα", "https://www.gov.gr/ipiresies/ergasia-kai-asphalise/asphalise/asphalistike-ikanoteta")
         st.link_button("📋 ATLAS", "https://www.atlas.gov.gr/ATLAS/Pages/Home.aspx")
         st.link_button("📑 Υπεύθυνη Δήλωση", "https://www.gov.gr")
 
-        # AI Status Card
-        st.markdown("""
-        <div class="sidebar-card">
-            <h3 style="color: #667eea; margin-bottom: 1rem; font-size: 1.1rem;">🤖 AI Status</h3>
-        """, unsafe_allow_html=True)
-        
-        if st.session_state.chatbot.groq_client:
-            st.markdown("""
-            <div class="success-indicator" style="width: 100%; text-align: center; margin-bottom: 0.5rem;">
-                ✅ AI Assistant Ενεργό
-            </div>
-            <div style="text-align: center; color: #64748b; font-size: 0.8rem;">
-                Llama 3.1 8B • Ultra Fast
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown("""
-            <div class="warning-indicator" style="width: 100%; text-align: center; margin-bottom: 0.5rem;">
-                📚 Knowledge Base Mode
-            </div>
-            <div style="text-align: center; color: #64748b; font-size: 0.8rem;">
-                Χρειάζεται Groq API key
-            </div>
-            """, unsafe_allow_html=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("---")
 
-        # Actions
+        # AI Status
+        if st.session_state.chatbot.groq_client:
+            st.success("🤖 AI Assistant Ενεργό")
+            st.info("Χρησιμοποιεί Llama 3.1 8B")
+        else:
+            st.warning("📚 Knowledge Base Mode")
+            st.info("Για AI responses, χρειάζεται Groq API key")
+
+        st.markdown("---")
+
         if st.button("🗑️ Νέα Συνομιλία", use_container_width=True):
             st.session_state.messages = []
             st.rerun()
 
         # Statistics
-        if st.checkbox("📊 Στατιστικά", key="stats_toggle"):
-            st.markdown("""
-            <div class="sidebar-card">
-                <h3 style="color: #667eea; margin-bottom: 1rem; font-size: 1.1rem;">📈 Analytics</h3>
-            </div>
-            """, unsafe_allow_html=True)
-            
+        if st.checkbox("📊 Στατιστικά"):
             total_conversations = len(st.session_state.chatbot.conversation_history)
             ai_responses = sum(1 for conv in st.session_state.chatbot.conversation_history 
                              if conv['response'].get('source') == 'AI Assistant')
             
-            col_a, col_b = st.columns(2)
-            with col_a:
-                st.metric("Συνολικές ερωτήσεις", total_conversations)
-            with col_b:
-                st.metric("AI Απαντήσεις", ai_responses)
-            
+            st.metric("Συνολικές ερωτήσεις", total_conversations)
+            st.metric("AI Απαντήσεις", ai_responses)
             if total_conversations > 0:
                 ai_percentage = round((ai_responses / total_conversations) * 100, 1)
-                st.metric("AI Success Rate", f"{ai_percentage}%", delta=f"+{ai_percentage}%")
+                st.metric("AI Success Rate", f"{ai_percentage}%")
 
-    # Main container closing
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # Footer με νέο styling
+    # Footer
     st.markdown("<br><br>", unsafe_allow_html=True)
 
     with col2:
         st.markdown("""
-        <div style="
-            text-align: center; 
-            color: #64748b; 
-            font-size: 0.9rem; 
-            padding: 2rem 0; 
-            background: rgba(255, 255, 255, 0.5);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            margin-top: 2rem;
-            border: 1px solid rgba(255,255,255,0.2);
-        ">
-            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-weight: 600; margin-bottom: 0.5rem;">
-                Μητροπολιτικό Κολλέγιο Θεσσαλονίκης
-            </div>
-            <div style="color: #64748b;">
-                Τμήμα Προπονητικής & Φυσικής Αγωγής
-            </div>
-            <div style="font-size: 0.8rem; margin-top: 1rem; opacity: 0.7;">
-                Powered by Groq AI • Για τεχνική υποστήριξη επικοινωνήστε με τον Γεώργιο Σοφιανίδη
-            </div>
+        <div style="text-align: center; color: #6c757d; font-size: 0.9rem; padding: 2rem 0; border-top: 1px solid #e9ecef;">
+            Μητροπολιτικό Κολλέγιο Θεσσαλονίκης • Τμήμα Προπονητικής & Φυσικής Αγωγής<br>
+            <small>Powered by Groq AI • Για τεχνική υποστήριξη επικοινωνήστε με τον Γεώργιο Σοφιανίδη</small>
         </div>
         """, unsafe_allow_html=True)
 
