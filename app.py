@@ -18,12 +18,10 @@ st.set_page_config(
 # Professional CSS
 st.markdown("""
 <style>
-    /* Βασικό styling */
     .main {
         padding-top: 2rem;
     }
     
-    /* Header */
     .main-header {
         text-align: center;
         color: #1f4e79;
@@ -39,12 +37,6 @@ st.markdown("""
         color: #6c757d;
         font-size: 1.1rem;
         margin-bottom: 2rem;
-    }
-    
-    /* Chat styling */
-    .chat-container {
-        max-width: 800px;
-        margin: 0 auto;
     }
     
     .user-message {
@@ -65,19 +57,10 @@ st.markdown("""
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
     
-    .confidence-high {
-        border-left-color: #28a745 !important;
-    }
+    .confidence-high { border-left-color: #28a745 !important; }
+    .confidence-medium { border-left-color: #ffc107 !important; }
+    .confidence-low { border-left-color: #dc3545 !important; }
     
-    .confidence-medium {
-        border-left-color: #ffc107 !important;
-    }
-    
-    .confidence-low {
-        border-left-color: #dc3545 !important;
-    }
-    
-    /* Info cards */
     .info-card {
         background: #ffffff;
         border: 1px solid #e9ecef;
@@ -87,16 +70,6 @@ st.markdown("""
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
     
-    .quick-info {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border-radius: 8px;
-        padding: 1rem;
-        margin: 1rem 0;
-        text-align: center;
-    }
-    
-    /* Buttons */
     .stButton > button {
         width: 100%;
         border-radius: 6px;
@@ -106,19 +79,13 @@ st.markdown("""
         transition: all 0.3s ease;
     }
     
-    /* Hide Streamlit elements */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     
-    /* Responsive */
     @media (max-width: 768px) {
-        .main-header {
-            font-size: 1.8rem;
-        }
-        .sub-header {
-            font-size: 1rem;
-        }
+        .main-header { font-size: 1.8rem; }
+        .sub-header { font-size: 1rem; }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -127,6 +94,69 @@ class PracticeTrainingChatbot:
     def __init__(self):
         self.qa_data = self.load_qa_data()
         self.conversation_history = []
+        
+        # Συχνές ερωτήσεις για γρήγορη πρόσβαση
+        self.frequent_questions = [
+            "Πώς ξεκινάω την πρακτική άσκηση;",
+            "Τι έγγραφα χρειάζομαι;",
+            "Πόσες ώρες πρέπει να κάνω;",
+            "Πώς βγάζω ασφαλιστική ικανότητα;",
+            "Με ποιον επικοινωνώ;"
+        ]
+        
+        # Επεκτεταμένο λεξικό συνώνυμων για καλύτερο matching
+        self.synonyms = {
+            # Βασικές λέξεις
+            'πως': 'πώς', 'που': 'πού', 'ποσες': 'πόσες', 'ποσα': 'πόσα',
+            'χρειαζομαι': 'χρειάζομαι', 'θελω': 'θέλω', 'μπορω': 'μπορώ',
+            
+            # Πρακτική άσκηση
+            'πρακτικη': 'πρακτική', 'ασκηση': 'άσκηση', 'εξασκηση': 'άσκηση',
+            'ξεκιναω': 'ξεκινάω', 'αρχιζω': 'ξεκινάω', 'εκκινω': 'ξεκινάω',
+            
+            # Έγγραφα
+            'εγγραφα': 'έγγραφα', 'χαρτια': 'έγγραφα', 'δικαιολογητικα': 'έγγραφα',
+            'φορμες': 'φόρμες', 'αιτηση': 'αίτηση',
+            
+            # Ώρες και χρόνος
+            'ωρες': 'ώρες', 'χρονος': 'χρόνος', 'διαρκεια': 'διάρκεια',
+            'χρονοδιαγραμμα': 'χρονοδιάγραμμα',
+            
+            # Επικοινωνία
+            'επικοινωνια': 'επικοινωνία', 'μιλαω': 'επικοινωνώ', 'μιλησω': 'επικοινωνώ',
+            'βοηθεια': 'βοήθεια', 'υποστηριξη': 'βοήθεια',
+            
+            # Ασφαλιστικά
+            'ασφαλιστικη': 'ασφαλιστική', 'ικανοτητα': 'ικανότητα',
+            'ασφαλιση': 'ασφάλιση', 'βεβαιωση': 'βεβαίωση',
+            
+            # Δομές
+            'δομη': 'δομή', 'φορεα': 'φορέα', 'εταιρια': 'δομή',
+            'γυμναστηριο': 'γυμναστήριο', 'σωματειο': 'σωματείο',
+            
+            # Διαδικασίες
+            'συμβαση': 'σύμβαση', 'υπογραφη': 'υπογραφή',
+            'σφραγιδα': 'σφραγίδα', 'διαδικασια': 'διαδικασία',
+            
+            # Αξιολόγηση
+            'αξιολογηση': 'αξιολόγηση', 'βιβλιο': 'βιβλίο',
+            'κριτηρια': 'κριτήρια', 'βαθμος': 'βαθμός',
+            
+            # Οικονομικά
+            'κοστος': 'κόστος', 'χρηματα': 'χρήματα', 'πληρωμη': 'πληρωμή',
+            'δωρεαν': 'δωρεάν', 'τιμολογηση': 'τιμολόγηση'
+        }
+        
+        # Θεματικές κατηγορίες λέξεων
+        self.topic_keywords = {
+            'documents': ['έγγραφα', 'αίτηση', 'φόρμες', 'δικαιολογητικά', 'χαρτιά', 'υπεύθυνη', 'δήλωση'],
+            'start': ['ξεκινάω', 'αρχή', 'εκκίνηση', 'πώς', 'βήματα', 'διαδικασία'],
+            'hours': ['ώρες', '240', 'χρόνος', 'διάρκεια', 'πόσες', 'χρονοδιάγραμμα', 'deadline'],
+            'insurance': ['ασφαλιστική', 'ικανότητα', 'ασφάλιση', 'βεβαίωση', 'gov.gr', 'taxisnet'],
+            'contact': ['επικοινωνία', 'email', 'τηλέφωνο', 'βοήθεια', 'υπεύθυνος', 'μιλάω'],
+            'evaluation': ['αξιολόγηση', 'βιβλίο', 'κριτήρια', 'βαθμός', 'απόδοση'],
+            'cost': ['κόστος', 'χρήματα', 'πληρωμή', 'δωρεάν', 'οικονομικά']
+        }
         
     def load_qa_data(self) -> List[Dict]:
         try:
@@ -145,42 +175,173 @@ class PracticeTrainingChatbot:
                 "id": 1,
                 "category": "Γενικές Πληροφορίες",
                 "question": "Πώς ξεκινάω την πρακτική μου άσκηση;",
-                "answer": "Για να ξεκινήσετε την πρακτική σας άσκηση, επικοινωνήστε με τoν υπεύθυνo Γεώργιο Σοφιανίδη (gsofianidis@mitropolitiko.edu.gr). Πρέπει να συμπληρώσετε 240 ώρες πρακτικής άσκησης σε δομή της επιλογής σας.",
+                "answer": "Για να ξεκινήσετε την πρακτική σας άσκηση, επικοινωνήστε με τον υπεύθυνο Γιώργο Σοφιανίδη (gsofianidis@mitropolitiko.edu.gr). Πρέπει να συμπληρώσετε 240 ώρες πρακτικής άσκησης σε δομή της επιλογής σας.",
                 "keywords": ["ξεκινάω", "πρακτική", "άσκηση", "αρχή", "πώς"]
             }
         ]
     
     def preprocess_text(self, text: str) -> str:
+        """Εκτεταμένη προεπεξεργασία κειμένου"""
+        # Μετατροπή σε πεζά
         text = text.lower()
+        
+        # Αφαίρεση ειδικών χαρακτήρων εκτός από ελληνικά
         text = re.sub(r'[^\w\s]', ' ', text)
-        text = ' '.join(text.split())
+        
+        # Αντικατάσταση συνώνυμων
+        words = text.split()
+        processed_words = []
+        for word in words:
+            if word in self.synonyms:
+                processed_words.append(self.synonyms[word])
+            else:
+                processed_words.append(word)
+        
+        text = ' '.join(processed_words)
+        text = ' '.join(text.split())  # Αφαίρεση επιπλέον κενών
         return text
     
+    def get_topic_match_score(self, question: str) -> Dict[str, float]:
+        """Υπολογισμός score ανά θεματική κατηγορία"""
+        processed_question = self.preprocess_text(question)
+        question_words = processed_question.split()
+        
+        topic_scores = {}
+        for topic, keywords in self.topic_keywords.items():
+            score = 0
+            for keyword in keywords:
+                keyword_processed = self.preprocess_text(keyword)
+                if keyword_processed in processed_question:
+                    score += 1
+                # Partial matching
+                for word in question_words:
+                    if (len(word) > 3 and len(keyword_processed) > 3 and 
+                        (keyword_processed in word or word in keyword_processed)):
+                        score += 0.5
+            topic_scores[topic] = score
+        
+        return topic_scores
+    
     def calculate_similarity(self, question: str, qa_item: Dict) -> float:
+        """Βελτιωμένος υπολογισμός ομοιότητας"""
         processed_question = self.preprocess_text(question)
         processed_qa_question = self.preprocess_text(qa_item['question'])
+        processed_answer = self.preprocess_text(qa_item['answer'])
         
-        question_similarity = difflib.SequenceMatcher(None, processed_question, processed_qa_question).ratio()
+        question_words = processed_question.split()
+        qa_words = processed_qa_question.split()
         
-        keyword_similarity = 0
+        # 1. Άμεση ομοιότητα ερωτήσεων (40%)
+        direct_similarity = difflib.SequenceMatcher(None, processed_question, processed_qa_question).ratio()
+        
+        # 2. Ομοιότητα λέξεων-κλειδιών (35%)
+        keyword_score = 0
         if 'keywords' in qa_item:
             for keyword in qa_item['keywords']:
-                if self.preprocess_text(keyword) in processed_question:
-                    keyword_similarity += 0.2
+                keyword_processed = self.preprocess_text(keyword)
+                
+                # Exact match
+                if keyword_processed in processed_question:
+                    keyword_score += 0.4
+                
+                # Partial match
+                for word in question_words:
+                    if (len(word) > 2 and len(keyword_processed) > 2):
+                        # Substring matching
+                        if keyword_processed in word or word in keyword_processed:
+                            keyword_score += 0.2
+                        # Edit distance για παρόμοιες λέξεις
+                        similarity_ratio = difflib.SequenceMatcher(None, word, keyword_processed).ratio()
+                        if similarity_ratio > 0.8:
+                            keyword_score += 0.3
         
-        return (question_similarity * 0.7) + (min(keyword_similarity, 1.0) * 0.3)
+        keyword_score = min(keyword_score, 1.0)
+        
+        # 3. Κοινές λέξεις (15%)
+        common_words = set(question_words) & set(qa_words)
+        word_overlap = len(common_words) / max(len(question_words), 1) if question_words else 0
+        
+        # 4. Θεματική ομοιότητα (10%)
+        topic_scores = self.get_topic_match_score(question)
+        qa_topic_scores = self.get_topic_match_score(qa_item['question'])
+        
+        topic_similarity = 0
+        for topic in topic_scores:
+            if topic_scores[topic] > 0 and qa_topic_scores[topic] > 0:
+                topic_similarity += 0.3
+        topic_similarity = min(topic_similarity, 1.0)
+        
+        # Συνολικός υπολογισμός
+        total_similarity = (
+            direct_similarity * 0.40 +
+            keyword_score * 0.35 +
+            word_overlap * 0.15 +
+            topic_similarity * 0.10
+        )
+        
+        return min(total_similarity, 1.0)
     
     def find_best_answer(self, question: str) -> Tuple[str, float, str]:
+        """Βρες την καλύτερη απάντηση με βελτιωμένο matching"""
         if not self.qa_data:
             return "Λυπάμαι, δεν υπάρχουν διαθέσιμα δεδομένα.", 0.0, "Σφάλμα"
         
-        best_match = max(self.qa_data, key=lambda x: self.calculate_similarity(question, x))
-        similarity = self.calculate_similarity(question, best_match)
+        # Υπολογισμός ομοιότητας για όλα τα items
+        scored_items = []
+        for item in self.qa_data:
+            similarity = self.calculate_similarity(question, item)
+            scored_items.append((item, similarity))
+        
+        # Ταξινόμηση κατά φθίνουσα σειρά ομοιότητας
+        scored_items.sort(key=lambda x: x[1], reverse=True)
+        
+        best_match, similarity = scored_items[0]
+        
+        # Αν η ομοιότητα είναι πολύ χαμηλή, δώσε generic απάντηση
+        if similarity < 0.15:
+            return self.get_fallback_response(question), similarity, "Γενική Βοήθεια"
         
         return best_match['answer'], similarity, best_match.get('category', 'Γενικά')
     
+    def get_fallback_response(self, question: str) -> str:
+        """Γενική απάντηση όταν δεν βρίσκεται κατάλληλο match"""
+        processed_question = self.preprocess_text(question)
+        
+        # Έλεγχος για θεματικές κατηγορίες
+        topic_scores = self.get_topic_match_score(question)
+        max_topic = max(topic_scores, key=topic_scores.get) if topic_scores else None
+        
+        if topic_scores.get(max_topic, 0) > 0:
+            topic_responses = {
+                'contact': "Για αυτή την ερώτηση, παρακαλώ επικοινωνήστε απευθείας με τον υπεύθυνο **Γιώργο Σοφιανίδη** στο gsofianidis@mitropolitiko.edu.gr",
+                'documents': "Σχετικά με τα έγγραφα, επικοινωνήστε με τον **Γιώργο Σοφιανίδη** (gsofianidis@mitropolitiko.edu.gr) για λεπτομερείς οδηγίες.",
+                'hours': "Για ερωτήσεις σχετικά με τις ώρες και τα χρονοδιαγράμματα, επικοινωνήστε με τον **Γιώργο Σοφιανίδη** στο gsofianidis@mitropolitiko.edu.gr",
+                'insurance': "Για θέματα ασφαλιστικής ικανότητας, δοκιμάστε πρώτα το gov.gr ή επικοινωνήστε με τον **Γιώργο Σοφιανίδη** (gsofianidis@mitropolitiko.edu.gr)."
+            }
+            
+            if max_topic in topic_responses:
+                return topic_responses[max_topic]
+        
+        # Έλεγχος για λέξεις επικοινωνίας
+        contact_words = ['επικοινωνία', 'τηλέφωνο', 'email', 'μαιλ', 'πού', 'ποιος', 'υπεύθυνος']
+        if any(word in processed_question for word in contact_words):
+            return "Ο υπεύθυνος για την πρακτική άσκηση είναι ο **Γιώργος Σοφιανίδης**. Μπορείτε να τον επικοινωνήσετε στο gsofianidis@mitropolitiko.edu.gr"
+        
+        # Γενική απάντηση
+        return """Δεν βρήκα συγκεκριμένη απάντηση για αυτή την ερώτηση. 
+        
+**Προτείνω:**
+• Δοκιμάστε να αναδιατυπώσετε την ερώτηση με διαφορετικές λέξεις
+• Επιλέξτε από τις συχνές ερωτήσεις στο sidebar
+• Επικοινωνήστε με τον **Γιώργο Σοφιανίδη**: gsofianidis@mitropolitiko.edu.gr"""
+    
     def get_response(self, question: str) -> Dict:
+        """Κύρια μέθοδος για απάντηση"""
         answer, similarity, category = self.find_best_answer(question)
+        
+        # Βελτίωση της απάντησης βάση confidence
+        if similarity < 0.3:
+            answer = f"{answer}\n\n💡 **Συμβουλή:** Δοκιμάστε να διατυπώσετε την ερώτηση διαφορετικά ή επιλέξτε από τις συχνές ερωτήσεις."
         
         response = {
             'answer': answer,
@@ -247,9 +408,6 @@ def main():
         st.markdown("<br>", unsafe_allow_html=True)
         
         # Chat Interface
-        st.markdown('<div class="chat-container">', unsafe_allow_html=True)
-        
-        # Display messages
         for message in st.session_state.messages:
             if message["role"] == "user":
                 st.markdown(f'''
@@ -262,12 +420,11 @@ def main():
                 category = message.get("category", "")
                 timestamp = message.get("timestamp", "")
                 
-                # Καθορισμός χρώματος βάση confidence
-                if confidence > 0.7:
+                if confidence > 0.6:
                     conf_class = "confidence-high"
                     conf_icon = "🟢"
                     conf_text = "Υψηλή"
-                elif confidence > 0.4:
+                elif confidence > 0.3:
                     conf_class = "confidence-medium"
                     conf_icon = "🟡"
                     conf_text = "Μέτρια"
@@ -281,7 +438,7 @@ def main():
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem;">
                         <strong style="color: #1f4e79;">💬 Απάντηση</strong>
                         <span style="font-size: 0.85rem; color: #6c757d;">
-                            {conf_icon} {conf_text} • {category} • {timestamp}
+                            {conf_icon} {conf_text} • {timestamp}
                         </span>
                     </div>
                     <div style="line-height: 1.6;">
@@ -289,8 +446,6 @@ def main():
                     </div>
                 </div>
                 ''', unsafe_allow_html=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
         
         # Input
         st.markdown("<br>", unsafe_allow_html=True)
@@ -324,15 +479,39 @@ def main():
             
             st.rerun()
     
-    # Sidebar
+    # Sidebar με χρήσιμα στοιχεία
     with st.sidebar:
         st.markdown("## 📞 Επικοινωνία")
         
         st.markdown("""
         **Υπεύθυνος Πρακτικής Άσκησης**  
-        Γεώργιος Σοφιανίδης  
+        **Γιώργος Σοφιανίδης**  
         📧 gsofianidis@mitropolitiko.edu.gr
         """)
+        
+        st.markdown("---")
+        
+        # Συχνές ερωτήσεις
+        st.markdown("## ❓ Συχνές Ερωτήσεις")
+        
+        for question in st.session_state.chatbot.frequent_questions:
+            if st.button(question, key=f"faq_{question}", use_container_width=True):
+                # Προσθήκη της ερώτησης στη συνομιλία
+                st.session_state.messages.append({"role": "user", "content": question})
+                
+                # Λήψη απάντησης
+                response = st.session_state.chatbot.get_response(question)
+                
+                # Προσθήκη απάντησης
+                st.session_state.messages.append({
+                    "role": "assistant", 
+                    "content": response['answer'],
+                    "confidence": response['confidence'],
+                    "category": response['category'],
+                    "timestamp": response['timestamp']
+                })
+                
+                st.rerun()
         
         st.markdown("---")
         
@@ -343,22 +522,9 @@ def main():
         
         st.markdown("---")
         
-        # Categories
-        st.markdown("## 📋 Κατηγορίες")
-        categories = set(item.get('category', 'Γενικά') for item in st.session_state.chatbot.qa_data)
-        for category in sorted(categories):
-            st.markdown(f"• {category}")
-        
-        st.markdown("---")
-        
         if st.button("🗑️ Νέα Συνομιλία", use_container_width=True):
             st.session_state.messages = []
             st.rerun()
-        
-        # Admin section
-        if st.checkbox("🔧 Στατιστικά"):
-            st.metric("Ερωτήσεις", len(st.session_state.chatbot.conversation_history))
-            st.metric("Διαθέσιμα Q&A", len(st.session_state.chatbot.qa_data))
     
     # Footer
     st.markdown("<br><br>", unsafe_allow_html=True)
@@ -367,6 +533,7 @@ def main():
         st.markdown("""
         <div style="text-align: center; color: #6c757d; font-size: 0.9rem; padding: 2rem 0; border-top: 1px solid #e9ecef;">
             Μητροπολιτικό Κολλέγιο Θεσσαλονίκης • Τμήμα Προπονητικής & Φυσικής Αγωγής<br>
+            <small>Για τεχνική υποστήριξη επικοινωνήστε με τον Γιώργο Σοφιανίδη</small>
         </div>
         """, unsafe_allow_html=True)
 
