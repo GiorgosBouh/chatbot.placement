@@ -164,14 +164,11 @@ streamlit run app.py --server.enableCORS false
 
 **Επικοινωνία και Υποστήριξη:**
 
-**Υπεύθυνη Πρακτικής Άσκησης:**  
-Μαρία Ταμπάκη, MSc, PhD(c)  
-📧 mtampaki@mitropolitiko.edu.gr  
+**Υπεύθυνος Πρακτικής Άσκησης:**  
+Γεώργιος Σοφιανίδης  
+📧 gsofianidis@mitropolitiko.edu.gr  
 
-**Programme Leader:**  
-Ιωάννης Μητρούσης, MSc, PhD(c)  
-📧 imitrousis@mitropolitiko.edu.gr  
-📞 210 4121200  
+  
 
 **Τεχνική Υποστήριξη:**
 - GitHub Issues: [https://github.com/GiorgosBouh/chatbot.placement/issues](https://github.com/GiorgosBouh/chatbot.placement/issues)
