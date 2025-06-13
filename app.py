@@ -91,6 +91,17 @@ st.markdown("""
         box-shadow: 0 4px 8px rgba(0,0,0,0.15);
     }
     
+    .ai-message a {
+        color: #ffeb3b !important;
+        text-decoration: underline !important;
+        font-weight: bold !important;
+    }
+    
+    .ai-message a:hover {
+        color: #fff9c4 !important;
+        text-decoration: underline !important;
+    }
+    
     .confidence-high { border-left-color: #28a745 !important; }
     .confidence-medium { border-left-color: #ffc107 !important; }
     .confidence-low { border-left-color: #dc3545 !important; }
