@@ -28,7 +28,7 @@ st.set_page_config(
     page_title="Πρακτική Άσκηση - Μητροπολιτικό Κολλέγιο",
     page_icon="🎓",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 # Simplified CSS (removed complex animations that might cause issues)
@@ -60,26 +60,6 @@ st.markdown("""
         margin-bottom: 2rem;
         padding: 1rem 0;
         border-bottom: 1px solid #e8f4f8;
-    }
-    
-    .sidebar-hint {
-        position: sticky;
-        top: 10px;
-        background: linear-gradient(45deg, #4caf50, #45a049);
-        color: white;
-        padding: 0.5rem 1rem;
-        border-radius: 20px;
-        font-size: 0.9rem;
-        text-align: center;
-        margin-bottom: 1rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        animation: pulse-gentle 2s infinite;
-    }
-    
-    @keyframes pulse-gentle {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.02); }
-        100% { transform: scale(1); }
     }
     
     .user-message {
@@ -214,7 +194,7 @@ class AdvancedPracticeChatbot:
     "id": 1,
     "category": "Γενικές Πληροφορίες",
     "question": "Πώς ξεκινάω την πρακτική μου άσκηση;",
-    "answer": "**Βήμα 1:** Επικοινωνήστε με τον  υπεύθυνο **Γεώργιος Σοφιανίδης** στο gsofianidis@mitropolitiko.edu.gr\\n\\n**Βήμα 2:** Βρείτε δομή (γυμναστήριο, σωματείο, σχολείο) που σας ενδιαφέρει\\n\\n**Βήμα 3:** Ετοιμάστε τα απαραίτητα έγγραφα (αίτηση, ασφαλιστική ικανότητα, υπεύθυνη δήλωση)\\n\\n**Σημαντικό:** Χρειάζεστε να ολοκληρώσετε **240 ώρες μέχρι 30/4**. Το κολλέγιο καλύπτει όλα τα έξοδα της σύμβασης.",
+    "answer": "**Βήμα 1:** Επικοινωνήστε με την υπεύθυνη **Γεώργιος Σοφιανίδης** στο gsofianidis@mitropolitiko.edu.gr\\n\\n**Βήμα 2:** Βρείτε δομή (γυμναστήριο, σωματείο, σχολείο) που σας ενδιαφέρει\\n\\n**Βήμα 3:** Ετοιμάστε τα απαραίτητα έγγραφα (αίτηση, ασφαλιστική ικανότητα, υπεύθυνη δήλωση)\\n\\n**Σημαντικό:** Χρειάζεστε να ολοκληρώσετε **240 ώρες μέχρι 30/4**. Το κολλέγιο καλύπτει όλα τα έξοδα της σύμβασης.",
     "keywords": ["ξεκινάω", "ξεκινω", "αρχή", "αρχίζω", "πρακτική", "άσκηση", "πώς", "πως", "βήματα"]
   },
   {
@@ -325,7 +305,7 @@ class AdvancedPracticeChatbot:
     def get_fallback_response(self, question: str) -> str:
         """Fallback response system"""
         if not self.qa_data:
-            return "Λυπάμαι, δεν υπάρχουν διαθέσιμα δεδομένα. Επικοινωνήστε με τον Γεώργιο Σοφιανίδη: gsofianidis@mitropolitiko.edu.gr"
+            return "Δεν υπάρχουν διαθέσιμα δεδομένα. Επικοινωνήστε με τον Γεώργιο Σοφιανίδη: gsofianidis@mitropolitiko.edu.gr"
 
         # Find best match
         best_match = max(self.qa_data, key=lambda x: self.calculate_similarity(question, x))
@@ -334,12 +314,12 @@ class AdvancedPracticeChatbot:
         if similarity > 0.2:
             return best_match['answer']
         else:
-            return f"""Δεν βρήκα συγκεκριμένη απάντηση για αυτή την ερώτηση.
+            return f"""Δεν βρέθηκε συγκεκριμένη απάντηση για αυτή την ερώτηση.
 
-**Προτείνω:**
-• Δοκιμάστε να αναδιατυπώσετε την ερώτηση
-• Επιλέξτε από τις συχνές ερωτήσεις στο sidebar
-• Επικοινωνήστε με τον **Γεώργιο Σοφιανίδη**: gsofianidis@mitropolitiko.edu.gr"""
+**Προτεινόμενες ενέργειες:**
+• Αναδιατυπώστε την ερώτηση
+• Επιλέξτε από τις συχνές ερωτήσεις στο αριστερό μενού
+• Επικοινωνήστε με τον Γεώργιο Σοφιανίδη: gsofianidis@mitropolitiko.edu.gr"""
 
     def get_response(self, question: str) -> Dict:
         """Main response method"""
@@ -416,10 +396,10 @@ def main():
     if st.session_state.chatbot.groq_client:
         st.markdown('<div class="api-status">🚀 AI Assistant Ενεργό</div>', unsafe_allow_html=True)
         
-    # Sidebar hint για τους χρήστες
+    # Επαγγελματική ενδειξη για sidebar
     st.markdown("""
-    <div style="background: #e3f2fd; border: 1px solid #2196f3; border-radius: 8px; padding: 0.8rem; margin-bottom: 1.5rem; text-align: center;">
-        <strong>💡 Tip:</strong> Χρησιμοποιήστε το αριστερό μενού για <strong>συχνές ερωτήσεις</strong> και <strong>χρήσιμους συνδέσμους</strong> 👈
+    <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.6rem; margin-bottom: 1.5rem; text-align: center; font-size: 0.9rem;">
+        <strong>Πληροφορίες:</strong> Χρησιμοποιήστε το αριστερό μενού για συχνές ερωτήσεις και επικοινωνία 👈
     </div>
     """, unsafe_allow_html=True)
 
@@ -553,19 +533,16 @@ def main():
 
     # Sidebar
     with st.sidebar:
-        # Hint για τους χρήστες
-        st.markdown("""
-        <div class="sidebar-hint">
-            👈 Μενού Βοήθειας & Συχνών Ερωτήσεων
-        </div>
-        """, unsafe_allow_html=True)
-        
         st.markdown("## 📞 Επικοινωνία")
 
         st.markdown("""
         **Υπεύθυνος Πρακτικής Άσκησης**  
         **Γεώργιος Σοφιανίδης**  
         📧 gsofianidis@mitropolitiko.edu.gr
+        
+        **Τεχνική Υποστήριξη**  
+        **Γεώργιος Μπουχουράς**  
+        📧 gbouchouras@mitropolitiko.edu.gr
         """)
 
         st.markdown("---")
@@ -619,8 +596,10 @@ def main():
             st.session_state.messages = []
             st.rerun()
 
-        # Debug info
-        if st.checkbox("🔧 Debug Info"):
+        # Τεχνικές πληροφορίες
+        if st.checkbox("🔧 Τεχνικές Πληροφορίες"):
+            st.markdown("**Για τεχνικά προβλήματα:**")
+            st.markdown("📧 gbouchouras@mitropolitiko.edu.gr")
             st.write("Groq Available:", GROQ_AVAILABLE)
             st.write("Groq Client:", st.session_state.chatbot.groq_client is not None)
             st.write("QA Data Count:", len(st.session_state.chatbot.qa_data))
@@ -632,9 +611,9 @@ def main():
         st.markdown("""
         <div style="text-align: center; color: #6c757d; font-size: 0.9rem; padding: 2rem 0; border-top: 1px solid #e9ecef;">
             Μητροπολιτικό Κολλέγιο Θεσσαλονίκης • Τμήμα Προπονητικής & Φυσικής Αγωγής<br>
-            <small>Powered by Groq AI • Για τεχνική υποστήριξη επικοινωνήστε με τον Γεώργιο Μπουχουρά gbouchouras@mitropolitiko.edu.gr</small>
+            <small>Powered by Groq AI • Για τεχνική υποστήριξη επικοινωνήστε με τον Γεώργιο Σοφιανίδη</small>
         </div>
         """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
-    main()
+    main()    main()
