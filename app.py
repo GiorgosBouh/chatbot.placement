@@ -438,27 +438,27 @@ def main():
             with quick_col1:
                 st.markdown("""
                 <div class="info-card" style="text-align: center;">
-                    <h4 style="color: #1f4e79; margin-bottom: 0.5rem;">📅 Ώρες</h4>
+                    <h4 style="color: #1f4e79; margin-bottom: 0.5rem;">📅 Απαιτούμενες Ώρες</h4>
                     <p style="font-size: 1.2rem; font-weight: 600; color: #28a745; margin: 0;">240 ώρες</p>
-                    <small style="color: #6c757d;">μέχρι 30/4</small>
+                    <small style="color: #6c757d;">Προθεσμία: 30 Απριλίου</small>
                 </div>
                 """, unsafe_allow_html=True)
 
             with quick_col2:
                 st.markdown("""
                 <div class="info-card" style="text-align: center;">
-                    <h4 style="color: #1f4e79; margin-bottom: 0.5rem;">📋 Σύμβαση</h4>
-                    <p style="font-size: 1.2rem; font-weight: 600; color: #ffc107; margin: 0;">Moodle</p>
-                    <small style="color: #6c757d;">μέχρι 15/10</small>
+                    <h4 style="color: #1f4e79; margin-bottom: 0.5rem;">📋 Παράδοση Συμβάσεων</h4>
+                    <p style="font-size: 1.2rem; font-weight: 600; color: #ffc107; margin: 0;">Moodle Platform</p>
+                    <small style="color: #6c757d;">Προθεσμία: 15 Οκτωβρίου</small>
                 </div>
                 """, unsafe_allow_html=True)
 
             with quick_col3:
                 st.markdown("""
                 <div class="info-card" style="text-align: center;">
-                    <h4 style="color: #1f4e79; margin-bottom: 0.5rem;">⏰ Ωράριο</h4>
-                    <p style="font-size: 1.2rem; font-weight: 600; color: #17a2b8; margin: 0;">Δε-Σα</p>
-                    <small style="color: #6c757d;">μέχρι 8ω/ημέρα</small>
+                    <h4 style="color: #1f4e79; margin-bottom: 0.5rem;">⏰ Επιτρεπόμενο Ωράριο</h4>
+                    <p style="font-size: 1.2rem; font-weight: 600; color: #17a2b8; margin: 0;">Δευτέρα-Σάββατο</p>
+                    <small style="color: #6c757d;">Μέχρι 8 ώρες ανά ημέρα</small>
                 </div>
                 """, unsafe_allow_html=True)
 
