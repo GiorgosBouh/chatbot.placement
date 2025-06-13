@@ -8,22 +8,30 @@ from typing import List, Dict, Tuple
 import os
 import time
 
-# Groq API imports
+# Groq API imports with better error handling
+GROQ_AVAILABLE = False
+groq_client = None
+
 try:
     from groq import Groq
     GROQ_AVAILABLE = True
-except ImportError:
+    print("✅ Groq library imported successfully")
+except ImportError as e:
     GROQ_AVAILABLE = False
+    print(f"❌ Groq import failed: {e}")
+except Exception as e:
+    GROQ_AVAILABLE = False
+    print(f"❌ Groq error: {e}")
 
 # Ρύθμιση σελίδας
 st.set_page_config(
     page_title="Πρακτική Άσκηση - Μητροπολιτικό Κολλέγιο",
     page_icon="🎓",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
-# Professional CSS με typing animation
+# Simplified CSS (removed complex animations that might cause issues)
 st.markdown("""
 <style>
     .main {
@@ -54,9 +62,24 @@ st.markdown("""
         border-bottom: 1px solid #e8f4f8;
     }
     
-    .logo-container img {
-        border-radius: 8px;
+    .sidebar-hint {
+        position: sticky;
+        top: 10px;
+        background: linear-gradient(45deg, #4caf50, #45a049);
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        text-align: center;
+        margin-bottom: 1rem;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        animation: pulse-gentle 2s infinite;
+    }
+    
+    @keyframes pulse-gentle {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.02); }
+        100% { transform: scale(1); }
     }
     
     .user-message {
@@ -92,39 +115,6 @@ st.markdown("""
     .confidence-medium { border-left-color: #ffc107 !important; }
     .confidence-low { border-left-color: #dc3545 !important; }
     
-    .typing-indicator {
-        background: #f8f9fa;
-        border: 1px solid #e9ecef;
-        border-radius: 8px;
-        padding: 1rem;
-        margin: 1rem 0;
-        display: flex;
-        align-items: center;
-    }
-    
-    .typing-dots {
-        display: inline-block;
-        margin-left: 10px;
-    }
-    
-    .typing-dots span {
-        display: inline-block;
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background-color: #999;
-        margin: 0 2px;
-        animation: typing 1.4s infinite ease-in-out;
-    }
-    
-    .typing-dots span:nth-child(1) { animation-delay: -0.32s; }
-    .typing-dots span:nth-child(2) { animation-delay: -0.16s; }
-    
-    @keyframes typing {
-        0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
-        40% { transform: scale(1); opacity: 1; }
-    }
-    
     .info-card {
         background: #ffffff;
         border: 1px solid #e9ecef;
@@ -153,6 +143,11 @@ st.markdown("""
         transition: all 0.3s ease;
     }
     
+    /* Sidebar styling */
+    .css-1d391kg {
+        padding-top: 1rem;
+    }
+    
     /* Κρύψιμο Streamlit elements */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
@@ -161,7 +156,7 @@ st.markdown("""
     @media (max-width: 768px) {
         .main-header { font-size: 1.8rem; }
         .sub-header { font-size: 1rem; }
-        .logo-container img { max-width: 120px; }
+        .logo-container img { max-width: 180px; }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -180,66 +175,63 @@ class AdvancedPracticeChatbot:
             "Πώς βγάζω ασφαλιστική ικανότητα;",
             "Με ποιον επικοινωνώ;"
         ]
-        
-        # System prompt για το LM
-        self.system_prompt = """Είσαι ένας εξειδικευμένος σύμβουλος για θέματα πρακτικής άσκησης στο Μητροπολιτικό Κολλέγιο Θεσσαλονίκης, τμήμα Προπονητικής και Φυσικής Αγωγής.
-
-ΚΡΙΤΙΚΕΣ ΟΔΗΓΙΕΣ:
-- Χρησιμοποίησε ΜΟΝΟ ελληνικά. ΑΠΑΓΟΡΕΥΕΤΑΙ η χρήση αγγλικών ή greeklish λέξεων
-- Μην προσθέτεις πληροφορίες που δεν υπάρχουν στο context (τίτλους, βαθμούς, κλπ)
-- Χρησιμοποίησε ΜΟΝΟ τις πληροφορίες που σου δίνονται
-- Μην εφευρίσκεις ή μην υποθέτεις στοιχεία
-
-ΣΤΥΛ ΑΠΑΝΤΗΣΗΣ:
-- Επίσημος και επαγγελματικός τόνος
-- Άμεσες και συγκεκριμένες οδηγίες
-- Χωρίς χαιρετισμούς ή φιλικές εκφράσεις
-- Δομημένες απαντήσεις με σαφή βήματα
-- Περιορισμένη χρήση emojis (μόνο για σημαντικές πληροφορίες)
-
-ΒΑΣΙΚΕΣ ΠΛΗΡΟΦΟΡΙΕΣ (μόνο αυτές):
-- Υπεύθυνος: Γεώργιος Σοφιανίδης
-- Email: gsofianidis@mitropolitiko.edu.gr
-- Απαιτούμενες ώρες: 240 ώρες μέχρι 30/4
-- Ωράριο: Δευτέρα-Σάββατο, μέχρι 8 ώρες/ημέρα
-- Σύμβαση: Ανέβασμα στο moodle μέχρι 15/10
-
-ΟΔΗΓΙΕΣ:
-- Μπες κατευθείαν στο θέμα χωρίς περιττά λόγια
-- Δώσε πρακτικές και εφαρμόσιμες οδηγίες
-- Χρησιμοποίησε πάντα τις πληροφορίες από το context
-- Αν δεν έχεις αρκετές πληροφορίες, κατεύθυνε στον Γεώργιο Σοφιανίδη
-- Μην κάνεις ερωτήσεις εκτός αν είναι απαραίτητες για διευκρίνιση
-- Μην προσθέτεις τίτλους, βαθμούς ή άλλα στοιχεία που δεν αναφέρονται
-
-Απάντησε στα ελληνικά με επαγγελματικό τόνο χρησιμοποιώντας μόνο τις δοσμένες πληροφορίες."""
 
     def init_groq_client(self):
-        """Αρχικοποίηση Groq client"""
+        """Safer Groq client initialization"""
+        if not GROQ_AVAILABLE:
+            return None
+            
         try:
-            if GROQ_AVAILABLE:
-                # Δοκιμή για API key από streamlit secrets
-                api_key = st.secrets.get("GROQ_API_KEY")
-                if api_key:
-                    return Groq(api_key=api_key)
+            # Try to get API key from different sources
+            api_key = None
+            
+            # Try Streamlit secrets first
+            if hasattr(st, 'secrets') and 'GROQ_API_KEY' in st.secrets:
+                api_key = st.secrets["GROQ_API_KEY"]
+            
+            # Try environment variable
+            elif 'GROQ_API_KEY' in os.environ:
+                api_key = os.environ['GROQ_API_KEY']
+                
+            if api_key:
+                client = Groq(api_key=api_key)
+                # Test the client with a simple call
+                return client
+            else:
+                print("⚠️ No Groq API key found")
+                return None
+                
         except Exception as e:
-            st.sidebar.warning(f"Groq API μη διαθέσιμο: {str(e)}")
-        return None
+            print(f"❌ Groq client initialization failed: {e}")
+            return None
 
     def load_qa_data(self) -> List[Dict]:
-        """Φόρτωση δεδομένων Q&A"""
+        """Load Q&A data with better error handling"""
         try:
-            if os.path.exists('qa_data.json'):
-                with open('qa_data.json', 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            else:
-                return self.get_default_qa_data()
+            # Try to load from the embedded data
+            qa_data_json = '''[
+  {
+    "id": 1,
+    "category": "Γενικές Πληροφορίες",
+    "question": "Πώς ξεκινάω την πρακτική μου άσκηση;",
+    "answer": "**Βήμα 1:** Επικοινωνήστε με τον  υπεύθυνο **Γεώργιος Σοφιανίδης** στο gsofianidis@mitropolitiko.edu.gr\\n\\n**Βήμα 2:** Βρείτε δομή (γυμναστήριο, σωματείο, σχολείο) που σας ενδιαφέρει\\n\\n**Βήμα 3:** Ετοιμάστε τα απαραίτητα έγγραφα (αίτηση, ασφαλιστική ικανότητα, υπεύθυνη δήλωση)\\n\\n**Σημαντικό:** Χρειάζεστε να ολοκληρώσετε **240 ώρες μέχρι 30/4**. Το κολλέγιο καλύπτει όλα τα έξοδα της σύμβασης.",
+    "keywords": ["ξεκινάω", "ξεκινω", "αρχή", "αρχίζω", "πρακτική", "άσκηση", "πώς", "πως", "βήματα"]
+  },
+  {
+    "id": 2,
+    "category": "Έγγραφα & Διαδικασίες",
+    "question": "Τι έγγραφα χρειάζομαι για την πρακτική άσκηση;",
+    "answer": "**Για εσάς (φοιτητή):**\\n• Αίτηση πραγματοποίησης πρακτικής άσκησης ✅\\n• Στοιχεία φοιτητή (συμπληρωμένη φόρμα) ✅\\n• **Ασφαλιστική ικανότητα** από gov.gr ⭐\\n• **Υπεύθυνη δήλωση** (δεν παίρνετε επίδομα ΟΑΕΔ) ⭐\\n\\n**Για τη δομή:**\\n• Στοιχεία φορέα (ΑΦΜ, διεύθυνση, νόμιμος εκπρόσωπος, IBAN)\\n• Ημέρες και ώρες που σας δέχεται\\n\\n**💡 Tip:** Ξεκινήστε από την ασφαλιστική ικανότητα γιατί παίρνει χρόνο!",
+    "keywords": ["έγγραφα", "εγγραφα", "χρειάζομαι", "χρειαζομαι", "απαιτήσεις", "απαιτησεις", "δικαιολογητικά", "δικαιολογητικα", "αίτηση", "αιτηση"]
+  }
+]'''
+            return json.loads(qa_data_json)
         except Exception as e:
             st.error(f"Σφάλμα κατά τη φόρτωση δεδομένων: {e}")
             return self.get_default_qa_data()
 
     def get_default_qa_data(self) -> List[Dict]:
-        """Προεπιλεγμένα δεδομένα"""
+        """Fallback Q&A data"""
         return [
             {
                 "id": 1,
@@ -251,24 +243,24 @@ class AdvancedPracticeChatbot:
         ]
 
     def find_relevant_context(self, question: str, top_k: int = 3) -> str:
-        """RAG: Βρες σχετικό περιεχόμενο για το LM"""
+        """Find relevant context for the question"""
         if not self.qa_data:
             return ""
 
-        # Υπολογισμός ομοιότητας
+        # Calculate similarity scores
         scored_items = []
         for item in self.qa_data:
             score = self.calculate_similarity(question, item)
             scored_items.append((item, score))
 
-        # Ταξινόμηση και επιλογή top_k
+        # Sort and select top_k
         scored_items.sort(key=lambda x: x[1], reverse=True)
         top_items = scored_items[:top_k]
 
-        # Δημιουργία context
+        # Build context
         context = "ΣΧΕΤΙΚΕΣ ΠΛΗΡΟΦΟΡΙΕΣ:\n\n"
         for item, score in top_items:
-            if score > 0.1:  # Κράτα μόνο σχετικές πληροφορίες
+            if score > 0.1:  # Only include relevant information
                 context += f"Ερώτηση: {item['question']}\n"
                 context += f"Απάντηση: {item['answer']}\n"
                 context += f"Κατηγορία: {item.get('category', 'Γενικά')}\n\n"
@@ -276,12 +268,12 @@ class AdvancedPracticeChatbot:
         return context
 
     def calculate_similarity(self, question: str, qa_item: Dict) -> float:
-        """Υπολογισμός ομοιότητας (απλοποιημένη έκδοση)"""
+        """Calculate similarity score"""
         question_lower = question.lower()
         qa_question_lower = qa_item['question'].lower()
         qa_answer_lower = qa_item['answer'].lower()
 
-        # Βασική ομοιότητα
+        # Basic similarity
         similarity = difflib.SequenceMatcher(None, question_lower, qa_question_lower).ratio()
 
         # Keyword matching
@@ -299,26 +291,26 @@ class AdvancedPracticeChatbot:
         return min(similarity, 1.0)
 
     def get_groq_response(self, question: str) -> Tuple[str, bool]:
-        """Λήψη απάντησης από Groq LM"""
+        """Get response from Groq with better error handling"""
         if not self.groq_client:
             return "", False
 
         try:
-            # Βρες σχετικό context
+            # Find relevant context
             context = self.find_relevant_context(question)
 
-            # Δημιουργία του user message
+            # Create user message
             user_message = f"{context}\n\nΕΡΩΤΗΣΗ ΦΟΙΤΗΤΗ: {question}"
 
-            # Κλήση στο Groq API
+            # Call Groq API
             chat_completion = self.groq_client.chat.completions.create(
                 messages=[
-                    {"role": "system", "content": self.system_prompt},
+                    {"role": "system", "content": "Είσαι ένας εξειδικευμένος σύμβουλος για θέματα πρακτικής άσκησης στο Μητροπολιτικό Κολλέγιο Θεσσαλονίκης. Απάντησε στα ελληνικά με επαγγελματικό τόνο."},
                     {"role": "user", "content": user_message}
                 ],
-                model="llama-3.1-8b-instant",  # Γρήγορο και δωρεάν
-                temperature=0.3,  # Χαμηλότερο για πιο επίσημες απαντήσεις
-                max_tokens=800,   # Συντομότερες απαντήσεις
+                model="llama-3.1-8b-instant",
+                temperature=0.3,
+                max_tokens=800,
                 top_p=1,
                 stream=False
             )
@@ -327,15 +319,15 @@ class AdvancedPracticeChatbot:
             return response, True
 
         except Exception as e:
-            st.error(f"Σφάλμα Groq API: {str(e)}")
+            print(f"❌ Groq API error: {str(e)}")
             return "", False
 
     def get_fallback_response(self, question: str) -> str:
-        """Fallback στο παλιό σύστημα"""
+        """Fallback response system"""
         if not self.qa_data:
             return "Λυπάμαι, δεν υπάρχουν διαθέσιμα δεδομένα. Επικοινωνήστε με τον Γεώργιο Σοφιανίδη: gsofianidis@mitropolitiko.edu.gr"
 
-        # Βρες την καλύτερη απάντηση
+        # Find best match
         best_match = max(self.qa_data, key=lambda x: self.calculate_similarity(question, x))
         similarity = self.calculate_similarity(question, best_match)
 
@@ -350,16 +342,16 @@ class AdvancedPracticeChatbot:
 • Επικοινωνήστε με τον **Γεώργιο Σοφιανίδη**: gsofianidis@mitropolitiko.edu.gr"""
 
     def get_response(self, question: str) -> Dict:
-        """Κύρια μέθοδος απάντησης"""
+        """Main response method"""
         start_time = time.time()
 
-        # Δοκιμή με Groq πρώτα
+        # Try Groq first
         if self.groq_client:
             answer, success = self.get_groq_response(question)
             if success and answer:
                 response = {
                     'answer': answer,
-                    'confidence': 0.95,  # Υψηλή εμπιστοσύνη για LM
+                    'confidence': 0.95,
                     'source': 'AI Assistant',
                     'response_time': round(time.time() - start_time, 2),
                     'timestamp': datetime.now().strftime("%H:%M")
@@ -375,7 +367,7 @@ class AdvancedPracticeChatbot:
                     'timestamp': datetime.now().strftime("%H:%M")
                 }
         else:
-            # Μόνο fallback
+            # Only fallback
             answer = self.get_fallback_response(question)
             response = {
                 'answer': answer,
@@ -385,7 +377,7 @@ class AdvancedPracticeChatbot:
                 'timestamp': datetime.now().strftime("%H:%M")
             }
 
-        # Αποθήκευση στο ιστορικό
+        # Save to history
         self.conversation_history.append({
             'question': question,
             'response': response,
@@ -394,37 +386,23 @@ class AdvancedPracticeChatbot:
 
         return response
 
-def show_typing_indicator():
-    """Εμφάνιση typing indicator"""
-    typing_placeholder = st.empty()
-    typing_placeholder.markdown("""
-    <div class="typing-indicator">
-        <strong>🤖 Σκέφτομαι</strong>
-        <div class="typing-dots">
-            <span></span>
-            <span></span>
-            <span></span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    return typing_placeholder
-
 def main():
-    # Αρχικοποίηση
+    # Initialize
     if 'chatbot' not in st.session_state:
         st.session_state.chatbot = AdvancedPracticeChatbot()
 
     if 'messages' not in st.session_state:
         st.session_state.messages = []
 
-    # Header με logo
+    # Header with logo
     st.markdown('<div class="logo-container">', unsafe_allow_html=True)
 
     logo_col, title_col = st.columns([1, 4])
 
     with logo_col:
+        # Safer image loading with fallback - ΜΕΓΑΛΥΤΕΡΟ ΛΟΓΟΤΥΠΟ
         try:
-            st.image("https://raw.githubusercontent.com/GiorgosBouh/chatbot.placement/main/MK_LOGO_SEO_1200x630.png", width=140)
+            st.image("https://raw.githubusercontent.com/GiorgosBouh/chatbot.placement/main/MK_LOGO_SEO_1200x630.png", width=220)
         except:
             st.markdown("🎓", unsafe_allow_html=True)
 
@@ -437,6 +415,13 @@ def main():
     # API Status
     if st.session_state.chatbot.groq_client:
         st.markdown('<div class="api-status">🚀 AI Assistant Ενεργό</div>', unsafe_allow_html=True)
+        
+    # Sidebar hint για τους χρήστες
+    st.markdown("""
+    <div style="background: #e3f2fd; border: 1px solid #2196f3; border-radius: 8px; padding: 0.8rem; margin-bottom: 1.5rem; text-align: center;">
+        <strong>💡 Tip:</strong> Χρησιμοποιήστε το αριστερό μενού για <strong>συχνές ερωτήσεις</strong> και <strong>χρήσιμους συνδέσμους</strong> 👈
+    </div>
+    """, unsafe_allow_html=True)
 
     # Layout με στήλες
     col1, col2, col3 = st.columns([1, 3, 1])
@@ -473,7 +458,6 @@ def main():
                 </div>
                 """, unsafe_allow_html=True)
 
-        # Βελτιωμένο header styling
         st.markdown('<div style="margin-bottom: 2rem;"></div>', unsafe_allow_html=True)
 
         # Chat Interface
@@ -552,12 +536,6 @@ def main():
             # Add user message
             st.session_state.messages.append({"role": "user", "content": user_input.strip()})
 
-            # Show typing indicator για LM responses
-            if st.session_state.chatbot.groq_client:
-                typing_placeholder = show_typing_indicator()
-                time.sleep(1)  # Simulated thinking time
-                typing_placeholder.empty()
-
             # Get bot response
             response = st.session_state.chatbot.get_response(user_input.strip())
 
@@ -575,6 +553,13 @@ def main():
 
     # Sidebar
     with st.sidebar:
+        # Hint για τους χρήστες
+        st.markdown("""
+        <div class="sidebar-hint">
+            👈 Μενού Βοήθειας & Συχνών Ερωτήσεων
+        </div>
+        """, unsafe_allow_html=True)
+        
         st.markdown("## 📞 Επικοινωνία")
 
         st.markdown("""
@@ -590,13 +575,13 @@ def main():
 
         for question in st.session_state.chatbot.frequent_questions:
             if st.button(question, key=f"faq_{question}", use_container_width=True):
-                # Προσθήκη της ερώτησης στη συνομιλία
+                # Add question to conversation
                 st.session_state.messages.append({"role": "user", "content": question})
 
-                # Λήψη απάντησης
+                # Get response
                 response = st.session_state.chatbot.get_response(question)
 
-                # Προσθήκη απάντησης
+                # Add response
                 st.session_state.messages.append({
                     "role": "assistant",
                     "content": response['answer'],
@@ -623,7 +608,10 @@ def main():
             st.info("Χρησιμοποιεί Llama 3.1 8B")
         else:
             st.warning("📚 Knowledge Base Mode")
-            st.info("Για AI responses, χρειάζεται Groq API key")
+            if GROQ_AVAILABLE:
+                st.info("Για AI responses, χρειάζεται Groq API key")
+            else:
+                st.error("Groq library δεν είναι διαθέσιμη")
 
         st.markdown("---")
 
@@ -631,17 +619,11 @@ def main():
             st.session_state.messages = []
             st.rerun()
 
-        # Statistics
-        if st.checkbox("📊 Στατιστικά"):
-            total_conversations = len(st.session_state.chatbot.conversation_history)
-            ai_responses = sum(1 for conv in st.session_state.chatbot.conversation_history 
-                             if conv['response'].get('source') == 'AI Assistant')
-            
-            st.metric("Συνολικές ερωτήσεις", total_conversations)
-            st.metric("AI Απαντήσεις", ai_responses)
-            if total_conversations > 0:
-                ai_percentage = round((ai_responses / total_conversations) * 100, 1)
-                st.metric("AI Success Rate", f"{ai_percentage}%")
+        # Debug info
+        if st.checkbox("🔧 Debug Info"):
+            st.write("Groq Available:", GROQ_AVAILABLE)
+            st.write("Groq Client:", st.session_state.chatbot.groq_client is not None)
+            st.write("QA Data Count:", len(st.session_state.chatbot.qa_data))
 
     # Footer
     st.markdown("<br><br>", unsafe_allow_html=True)
@@ -650,7 +632,7 @@ def main():
         st.markdown("""
         <div style="text-align: center; color: #6c757d; font-size: 0.9rem; padding: 2rem 0; border-top: 1px solid #e9ecef;">
             Μητροπολιτικό Κολλέγιο Θεσσαλονίκης • Τμήμα Προπονητικής & Φυσικής Αγωγής<br>
-            <small>Powered by Groq AI • Για τεχνική υποστήριξη επικοινωνήστε με τον Γεώργιο Σοφιανίδη</small>
+            <small>Powered by Groq AI • Για τεχνική υποστήριξη επικοινωνήστε με τον Γεώργιο Μπουχουρά gbouchouras@mitropolitiko.edu.gr</small>
         </div>
         """, unsafe_allow_html=True)
 
