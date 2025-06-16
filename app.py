@@ -71,7 +71,7 @@ class InternshipChatbot:
 - Υπεύθυνος Πρακτικής Άσκησης: Γεώργιος Σοφιανίδης
 - Email: gsofianidis@mitropolitiko.edu.gr
 - Τεχνική Υποστήριξη: Γεώργιος Μπουχουράς (gbouchouras@mitropolitiko.edu.gr)
-- Απαιτούμενες ώρες: 240 ώρες μέχρι 30/4
+- Απαιτούμενες ώρες: 240 ώρες μέχρι 30/5
 - Ωράριο: Δευτέρα-Σάββατο, μέχρι 8 ώρες/ημέρα
 - Σύμβαση: Ανέβασμα στο moodle μέχρι 15/10
 
@@ -82,127 +82,89 @@ class InternshipChatbot:
 
 Απάντησε στα ελληνικά με αυστηρά επαγγελματικό τόνο χρησιμοποιώντας μόνο τις δοσμένες πληροφορίες."""
 
-    @st.cache_data
-    def load_qa_data_from_file(_self, filename: str = "qa_data.json", _mtime: float = None) -> List[Dict]:
-        """Load Q&A data from Git repository file with smart caching"""
+    def load_qa_data(self) -> List[Dict]:
+        """Load Q&A data with better error handling and debugging"""
+        filename = "qa_data.json"
+        
+        print(f"🔍 Looking for {filename}...")
+        
+        # Check if file exists
+        if not os.path.exists(filename):
+            print(f"❌ File {filename} not found in current directory")
+            print(f"📁 Current directory: {os.getcwd()}")
+            print(f"📂 Files in directory: {[f for f in os.listdir('.') if f.endswith('.json')]}")
+            return self.get_updated_fallback_data()
+        
+        # Try to load the file
         try:
-            if os.path.exists(filename):
-                with open(filename, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    print(f"✅ Loaded {len(data)} Q&A entries from {filename}")
-                    return data
-            else:
-                print(f"⚠️ File {filename} not found, using embedded data")
-                return []
+            with open(filename, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                
+            # Validate data structure
+            if not isinstance(data, list):
+                print(f"❌ Invalid data format in {filename} - expected list")
+                return self.get_updated_fallback_data()
+            
+            if not data:
+                print(f"❌ Empty data in {filename}")
+                return self.get_updated_fallback_data()
+            
+            # Check data integrity
+            required_fields = ['id', 'category', 'question', 'answer', 'keywords']
+            for i, entry in enumerate(data):
+                if not all(field in entry for field in required_fields):
+                    print(f"❌ Missing fields in entry {i}: {entry.keys()}")
+                    return self.get_updated_fallback_data()
+            
+            print(f"✅ Successfully loaded {len(data)} Q&A entries from {filename}")
+            print(f"📊 Entry IDs: {[entry['id'] for entry in data[:5]]}{'...' if len(data) > 5 else ''}")
+            return data
+            
+        except json.JSONDecodeError as e:
+            print(f"❌ JSON decode error in {filename}: {e}")
+            return self.get_updated_fallback_data()
         except Exception as e:
             print(f"❌ Error loading {filename}: {e}")
-            return []
+            return self.get_updated_fallback_data()
 
-    def load_qa_data(self) -> List[Dict]:
-        """Load Q&A data with auto-detection from Git repository"""
-        # Get file modification time for cache invalidation
-        filename = "qa_data.json"
-        mtime = None
-        if os.path.exists(filename):
-            mtime = os.path.getmtime(filename)
-        
-        # First try to load from Git repository file
-        qa_data = self.load_qa_data_from_file(filename, _mtime=mtime)
-        
-        if qa_data:
-            return qa_data
-        
-        # Fallback to embedded data
-        print("📋 Using embedded Q&A data as fallback")
-        try:
-            # Try to load from the embedded data
-            qa_data_json = '''[
-  {
-    "id": 1,
-    "category": "Γενικές Πληροφορίες",
-    "question": "Πώς ξεκινάω την πρακτική μου άσκηση;",
-    "answer": "**Βήμα 1:** Επικοινωνήστε με τον υπεύθυνο **Γεώργιο Σοφιανίδη** στο gsofianidis@mitropolitiko.edu.gr\\n\\n**Βήμα 2:** Βρείτε δομή (γυμναστήριο, σωματείο, σχολείο) που σας ενδιαφέρει\\n\\n**Βήμα 3:** Ετοιμάστε τα απαραίτητα έγγραφα (αίτηση, ασφαλιστική ικανότητα, υπεύθυνη δήλωση)\\n\\n**Σημαντικό:** Χρειάζεστε να ολοκληρώσετε **240 ώρες μέχρι 30/4**. Το κολλέγιο καλύπτει όλα τα έξοδα της σύμβασης.",
-    "keywords": ["ξεκινάω", "ξεκινω", "αρχή", "αρχίζω", "πρακτική", "άσκηση", "πώς", "πως", "βήματα"]
-  },
-  {
-    "id": 2,
-    "category": "Έγγραφα & Διαδικασίες",
-    "question": "Τι έγγραφα χρειάζομαι για την πρακτική άσκηση;",
-    "answer": "**Για εσάς (φοιτητή):**\\n• Αίτηση πραγματοποίησης πρακτικής άσκησης\\n• Στοιχεία φοιτητή (συμπληρωμένη φόρμα)\\n• **Ασφαλιστική ικανότητα** από gov.gr\\n• **Υπεύθυνη δήλωση** (δεν παίρνετε επίδομα ΟΑΕΔ)\\n\\n**Για τη δομή:**\\n• Στοιχεία φορέα (ΑΦΜ, διεύθυνση, νόμιμος εκπρόσωπος, IBAN)\\n• Ημέρες και ώρες που σας δέχεται\\n\\n**Σημείωση:** Ξεκινήστε από την ασφαλιστική ικανότητα γιατί χρειάζεται χρόνο.",
-    "keywords": ["έγγραφα", "εγγραφα", "χρειάζομαι", "χρειαζομαι", "απαιτήσεις", "απαιτησεις", "δικαιολογητικά", "δικαιολογητικα", "αίτηση", "αιτηση"]
-  },
-  {
-    "id": 3,
-    "category": "Τοποθέτηση",
-    "question": "Πού μπορώ να κάνω την πρακτική μου άσκηση;",
-    "answer": "**Δημόσιοι Φορείς:**\\n• Σχολεία (δημοτικά, γυμνάσια, λύκεια)\\n• Δημοτικά αθλητικά κέντρα\\n• ΔΑΚ (Δημοτικές Αθλητικές Κοινότητες)\\n\\n**Ιδιωτικοί Φορείς:**\\n• Γυμναστήρια & Fitness clubs\\n• Αθλητικά σωματεία\\n• Κολυμβητικά κέντρα\\n• Ιδιωτικά αθλητικά κέντρα\\n\\n**Προσοχή:** Η δομή πρέπει να είναι αναγνωρισμένη και να σχετίζεται με την προπονητική/φυσική αγωγή. Το ωράριο συμφωνείται μαζί τους.",
-    "keywords": ["που", "πού", "τοποθέτηση", "τοποθετηση", "γυμναστήρια", "γυμναστηρια", "σωματεία", "σωματεια", "σχολεία", "σχολεια", "φορείς", "φορεις", "δομή", "δομη"]
-  },
-  {
-    "id": 4,
-    "category": "Ώρες & Χρονοδιάγραμμα",
-    "question": "Πόσες ώρες πρέπει να κάνω πρακτική άσκηση;",
-    "answer": "**Υποχρεωτικό:** Τουλάχιστον **240 ώρες**\\n\\n**Deadline:** Μέχρι **30 Μαϊου**\\n\\n**Κανόνες ωραρίου:**\\n• Δευτέρα έως Σάββατο (ΌΧΙ Κυριακές)\\n• Μέχρι **8 ώρες την ημέρα**\\n• Το ωράριο ορίζεται από τη δομή σε συνεργασία μαζί σας\\n\\n**Υπολογισμός:** 240 ώρες = περίπου 6 εβδομάδες x 40 ώρες ή 8 εβδομάδες x 30 ώρες\\n\\n**Αν τελειώσετε νωρίτερα** από την προβλεπόμενη ημερομηνία, ενημερώστε τον Γεώργιο Σοφιανίδη.",
-    "keywords": ["ώρες", "ωρες", "240", "πόσες", "ποσες", "πόσα", "ποσα", "χρονοδιάγραμμα", "χρονοδιαγραμμα", "διάρκεια", "διαρκεια", "χρόνος", "χρονος", "30/4", "deadline"]
-  },
-  {
-    "id": 5,
-    "category": "Ασφαλιστική Ικανότητα",
-    "question": "Πώς βγάζω ασφαλιστική ικανότητα;",
-    "answer": "**Για να αρχίσετε τη διαδικασία, ακολουθήστε τα ακόλουθα βήματα:**\\n\\n**Βήμα 1:** Εισέλθετε στο ιστότοπο του Οργανισμού Ερευνών και Τεχνολογικής Ανάπτυξης (ΕΤΑΑΔ) στο gov.gr.\\n\\n**Βήμα 2:** Βρείτε την υπηρεσία \\"Ασφαλιστική ικανότητα\\" και κάντε κλικ πάνω σε αυτήν.\\n\\n**Βήμα 3:** Εισάγετε τα απαραίτητα στοιχεία σας, όπως το ΑΜΚΑ, το όνομα και το επώνυμό σας, και κάντε κλικ στο \\"Επιβεβαίωση\\".\\n\\n**Βήμα 4:** Αν σας απαιτείται, προσθέστε τα απαραίτητα έγγραφα, όπως το διαβατήριο ή το βεβαίωμα διαμονής.\\n\\n**Βήμα 5:** Κάντε κλικ στο \\"Απάντηση\\" για να δείτε την ασφαλιστική ικανότητά σας.\\n\\n**Σημαντικό:** Μπορεί να χρειαστείτε κάποιο χρόνο για να βγάλετε την ασφαλιστική ικανότητα, ενδεχομένως να ξεκινήσετε από αυτήν τη διαδικασία όσο το δυνατόν πιο σύντομα.\\n\\nΕάν αντιμετωπίσετε οποιαδήποτε δυσκολία ή εάν χρειάζεστε βοήθεια, μπορείτε να επικοινωνήσετε με τον υπεύθυνο Γεώργιο Σοφιανίδη στο gsofianidis@mitropolitiko.edu.gr.",
-    "keywords": ["ασφαλιστική", "ασφαλιστικη", "ικανότητα", "ικανοτητα", "πιστοποιητικό", "πιστοποιητικο", "gov.gr", "taxisnet", "ασφάλιση", "ασφαλιση"]
-  },
-  {
-    "id": 6,
-    "category": "Επικοινωνία",
-    "question": "Με ποιον επικοινωνώ για θέματα πρακτικής άσκησης;",
-    "answer": "**Υπεύθυνος Πρακτικής Άσκησης:**\\n**Γεώργιος Σοφιανίδης**\\n📧 gsofianidis@mitropolitiko.edu.gr\\n\\n**Για τεχνικά προβλήματα (εφαρμογές, moodle, κλπ):**\\n**Γεώργιος Μπουχουράς**\\n📧 gbouchouras@mitropolitiko.edu.gr\\n\\n**Σημείωση:** Επικοινωνήστε με τον κ. Σοφιανίδη για όλα τα θέματα περιεχομένου της πρακτικής άσκησης. Για τεχνικά ζητήματα, απευθυνθείτε στον κ. Μπουχουρά.",
-    "keywords": ["επικοινωνία", "επικοινωνια", "επικοινωνώ", "επικοινωνω", "email", "τηλέφωνο", "τηλεφωνο", "υπεύθυνος", "υπευθυνος", "Σοφιανίδης", "Σοφιανιδης"]
-  },
-  {
-    "id": 7,
-    "category": "Μηνιαίο Ημερολόγιο",
-    "question": "Πώς συμπληρώνω το μηνιαίο ημερολόγιο;",
-    "answer": "**Υποχρεωτικό:** Κάθε μήνα πρέπει να στείλετε ημερολόγιο με τις ώρες σας\\n\\n**Περιεχόμενο ημερολογίου:**\\n• **Ημερομηνία** κάθε μέρας\\n• **Ώρες άφιξης και αναχώρησης**\\n• **Σύνολο ωρών ανά ημέρα**\\n• **Περιγραφή δραστηριοτήτων** (προπόνηση, διοικητικά, κλπ)\\n• **Υπογραφή επόπτη** από τη δομή\\n\\n**Αποστολή:**\\n• Στείλτε το στον Γεώργιο Σοφιανίδη κάθε τέλος μήνα\\n• Μορφή: PDF ή φωτογραφία με καλή ανάγνωση\\n\\n**Προσοχή:** Χωρίς μηνιαίο ημερολόγιο δεν μπορεί να αναγνωριστεί η πρακτική σας.",
-    "keywords": ["ημερολόγιο", "ημερολογιο", "μηνιαίο", "μηνιαιο", "ώρες", "ωρες", "καταγραφή", "καταγραφη", "στείλω", "στειλω"]
-  },
-  {
-    "id": 8,
-    "category": "Κλειδώματα & Καθυστερήσεις",
-    "question": "Τι γίνεται αν καθυστερήσω;",
-    "answer": "**Σημαντικές προθεσμίες:**\\n\\n**30 Μαϊου:** Τέλος πρακτικής άσκησης\\n• Αν δεν ολοκληρώσετε τις 240 ώρες, κλειδώνει το μάθημα\\n• Θα πρέπει να επαναλάβετε την επόμενη χρονιά\\n\\n**15 Οκτωβρίου:** Παράδοση συμβάσεων στο Moodle\\n• Αν δεν παραδώσετε, δεν θα περάσετε το μάθημα\\n• Ακόμη και αν έχετε κάνει τις ώρες\\n\\n**Συμβουλή:** Μην αφήνετε τίποτα για το τέλος. Ξεκινήστε νωρίς και ενημερώνετε τακτικά τον υπεύθυνο.",
-    "keywords": ["καθυστερήσω", "καθυστερησω", "καθυστέρηση", "καθυστερηση", "προθεσμία", "προθεσμια", "κλείδωμα", "κλειδωμα", "deadline"]
-  },
-  {
-    "id": 9,
-    "category": "Ασφάλιση & Ατυχήματα",
-    "question": "Τι γίνεται αν πάθω ατύχημα κατά την πρακτική;",
-    "answer": "**Κάλυψη:** Είστε ασφαλισμένοι από το κολλέγιο κατά τη διάρκεια της πρακτικής\\n\\n**Σε περίπτωση ατυχήματος:**\\n1. **Άμεσα:** Ενημερώστε τον επόπτη της δομής\\n2. **Ιατρική βοήθεια:** Αν χρειάζεται, πηγαίνετε σε γιατρό/νοσοκομείο\\n3. **Καταγραφή:** Συμπληρώστε έντυπο ατυχήματος στη δομή\\n4. **Ενημέρωση:** Ειδοποιήστε ΑΜΕΣΑ τον Γεώργιο Σοφιανίδη\\n\\n**Παραστατικά που χρειάζεστε:**\\n• Αντίγραφο εντύπου ατυχήματος\\n• Ιατρικές εξετάσεις (αν υπάρχουν)\\n• Βεβαίωση από τη δομή\\n\\n**Σημαντικό:** Μην αγνοήσετε ακόμη και μικρά ατυχήματα.",
-    "keywords": ["ατύχημα", "ατυχημα", "ασφάλιση", "ασφαλιση", "τραυματισμός", "τραυματισμος", "γιατρός", "γιατρος", "νοσοκομείο", "νοσοκομειο"]
-  },
-  {
-    "id": 10,
-    "category": "Αξιολόγηση",
-    "question": "Πώς αξιολογούμαι στην πρακτική άσκηση;",
-    "answer": "**Κριτήρια αξιολόγησης:**\\n\\n**Επόπτης δομής (70%):**\\n• Συνέπεια και παρουσία\\n• Συνεργασία και επαγγελματισμός\\n• Ικανότητες προπονητικής\\n• Συμμετοχή σε δραστηριότητες\\n\\n**Υπεύθυνος πρακτικής (30%):**\\n• Μηνιαία ημερολόγια\\n• Τελική αναφορά πρακτικής\\n• Συνολική εκτίμηση προόδου\\n\\n**Βαθμολογία:** 1-10 (πέρασμα από 5)\\n\\n**Τελική εξέταση:** ΔΕΝ υπάρχει γραπτή εξέταση. Η αξιολόγηση βασίζεται αποκλειστικά στην πρακτική εργασία και τα παραδοτέα.",
-    "keywords": ["αξιολόγηση", "αξιολογηση", "βαθμός", "βαθμος", "βαθμολογία", "βαθμολογια", "εξέταση", "εξεταση", "πέρασα", "περασα"]
-  }
-]'''
-            data = json.loads(qa_data_json)
-            return data
-        except Exception as e:
-            print(f"❌ Error loading embedded data: {e}")
-            return self.get_default_qa_data()
-
-    def get_default_qa_data(self) -> List[Dict]:
-        """Fallback Q&A data"""
+    def get_updated_fallback_data(self) -> List[Dict]:
+        """Updated fallback data with more entries"""
+        print("📋 Using updated fallback data...")
         return [
             {
                 "id": 1,
                 "category": "Γενικές Πληροφορίες",
                 "question": "Πώς ξεκινάω την πρακτική μου άσκηση;",
-                "answer": "Για να ξεκινήσετε την πρακτική άσκηση, επικοινωνήστε με τον υπεύθυνο Γεώργιο Σοφιανίδη στο gsofianidis@mitropolitiko.edu.gr. Απαιτούνται 240 ώρες πρακτικής άσκησης σε δομή της επιλογής σας μέχρι 30/4.",
-                "keywords": ["ξεκινάω", "πρακτική", "άσκηση", "αρχή", "πώς"]
+                "answer": "**📞 Βήμα 1:** Ενημερώνω τον υπεύθυνο **Γεώργιο Σοφιανίδη** (gsofianidis@mitropolitiko.edu.gr) για την **επιθυμία για έναρξη πρακτικής**\n\n**🏢 Βήμα 2:** Βρίσκω δομή (γυμναστήριο, σωματείο, σχολείο) **σύμφωνα με τη συζήτηση** που θα κάνω με τον υπεύθυνο της πρακτικής\n\n**📋 Βήμα 3:** Βρίσκω και κατεβάζω τα σχετικά έγγραφα από τη σχετική πύλη στο μάθημα **SPORTS COACHING PRACTICE & EXPERTISE DEVELOPMENT (SE5117)**\n\n**✍️ Βήμα 4:** **Συμπληρώνω** όλα τα απαραίτητα έγγραφα (αίτηση, ασφαλιστική ικανότητα, υπεύθυνη δήλωση, στοιχεία φορέα)\n\n**📤 Βήμα 5:** **Ανεβάζω** τα συμπληρωμένα έγγραφα στη σχετική πύλη προκειμένου να γίνει η σύμβασή μου\n\n**⏳ Βήμα 6:** **Περιμένω ενημέρωση** από τον υπεύθυνο πρακτικής ότι η σύμβαση έχει γίνει\n\n**🚀 ΕΝΑΡΞΗ:** **Μόλις η σύμβαση γίνει και ενημερωθώ** από τον υπεύθυνο πρακτικής, **τότε και μόνο τότε μπορώ να ξεκινήσω** την πρακτική άσκηση!",
+                "keywords": ["ξεκινάω", "ξεκινώ", "αρχή", "αρχίζω", "αρχίσω", "ξεκίνημα", "πρακτική", "άσκηση", "πώς", "πως", "βήματα", "διαδικασία", "διαδικασιες"]
+            },
+            {
+                "id": 2,
+                "category": "Έγγραφα & Διαδικασίες",
+                "question": "Τι έγγραφα χρειάζομαι για την πρακτική άσκηση;",
+                "answer": "**Για εσάς (φοιτητή):**\n• Αίτηση πραγματοποίησης πρακτικής άσκησης ✅\n• Στοιχεία φοιτητή (συμπληρωμένη φόρμα) ✅\n• **Ασφαλιστική ικανότητα** από gov.gr ⭐\n• **Υπεύθυνη δήλωση** (δεν παίρνετε επίδομα ΟΑΕΔ)\n\n**Για τη δομή:**\n• Στοιχεία φορέα (ΑΦΜ, διεύθυνση, νόμιμος εκπρόσωπος)\n• Ημέρες και ώρες που σας δέχεται\n\n**💡 Tip:** Ξεκινήστε από την ασφαλιστική ικανότητα γιατί παίρνει χρόνο!",
+                "keywords": ["έγγραφα", "εγγραφα", "χαρτιά", "χαρτια", "χρειάζομαι", "χρειαζομαι", "απαιτήσεις", "απαιτησεις", "απαιτούνται", "απαιτουνται", "δικαιολογητικά", "δικαιολογητικα", "φάκελος", "φακελος", "αίτηση", "αιτηση"]
+            },
+            {
+                "id": 30,
+                "category": "Οικονομικά & Αμοιβή",
+                "question": "Παίρνω αμοιβή για την πρακτική άσκηση; Τι κόστος έχει για τη δομή;",
+                "answer": "**💰 ΓΙΑ ΤΟΥΣ ΦΟΙΤΗΤΕΣ:**\n\n❌ **ΔΕΝ υπάρχει αμοιβή** για την πρακτική άσκηση\n• Η πρακτική άσκηση είναι **μη αμειβόμενη**\n• Είναι μέρος των σπουδών σας\n• Δεν πρόκειται για εργασιακή σχέση\n\n**🏢 ΓΙΑ ΤΗ ΔΟΜΗ:**\n\n✅ **Η δομή δε χρεώνεται κάτι** (σχεδόν)\n• Υπάρχει ένα **ελάχιστο τέλος** που ενδεχομένως πρέπει να καταβάλει\n• Το κολλέγιο καλύπτει τα έξοδα της σύμβασης\n• Η ασφάλιση τιμολογείται στο κολλέγιο\n• Δεν υπάρχει οικονομική υποχρέωση προς τους φοιτητές",
+                "keywords": ["αμοιβή", "αμοιβη", "πληρωμή", "πληρωμη", "πληρώθώ", "πληρωθώ", "πληρωθω", "πληρωνομαι", "πληρώνομαι", "λεφτά", "λεφτα", "χρήματα", "χρηματα", "κόστος", "κοστος", "τέλος", "τελος", "δομή", "δομη", "φοιτητής", "φοιτητη", "οικονομικά", "οικονομικα", "μισθός", "μισθος"]
+            },
+            {
+                "id": 11,
+                "category": "Επικοινωνία",
+                "question": "Με ποιον επικοινωνώ για την πρακτική άσκηση;",
+                "answer": "**👩‍🏫 ΚΥΡΙΑ ΕΠΙΚΟΙΝΩΝΙΑ:**\n\n**Γεώργιος Σοφιανίδης, MSc, PhD(c)**\n📧 gsofianidis@mitropolitiko.edu.gr\n🎯 Υπεύθυνος Πρακτικής Άσκησης\n\n**👨‍🏫 ΕΝΑΛΛΑΚΤΙΚΗ ΕΠΙΚΟΙΝΩΝΙΑ:**\n\n**Γεώργιος Μπουχουράς, MSc, PhD**\n📧 gbouchouras@mitropolitiko.edu.gr\n📞 2314 409000\n🎯 Programme Leader\n\n**Πότε να επικοινωνήσετε:**\n• Ερωτήσεις για έγγραφα ➜ **Γεώργιος Σοφιανίδης**\n• Τεχνικά προβλήματα ➜ **Γεώργιος Σοφιανίδης**\n• Θέματα προγράμματος ➜ **Γεώργιος Μπουχουράς**",
+                "keywords": ["επικοινωνία", "επικοινωνια", "Σοφιανίδης", "Σοφιανιδης", "Μπουχουράς", "Μπουχουρας", "email", "τηλέφωνο", "τηλεφωνο", "υπεύθυνος", "υπευθυνος", "βοήθεια", "βοηθεια", "καθηγητής", "καθηγητης", "καθηγήτρια", "καθηγητρια", "contact", "στοιχεία", "στοιχεια"]
+            },
+            {
+                "id": 4,
+                "category": "Ώρες & Χρονοδιάγραμμα",
+                "question": "Πόσες ώρες πρέπει να κάνω πρακτική άσκηση;",
+                "answer": "**Υποχρεωτικό:** Τουλάχιστον **240 ώρες** ⏰\n\n**Deadline:** Μέχρι **30 Μάϊου** 📅\n\n**Κανόνες ωραρίου:**\n• Δευτέρα έως Σάββατο (ΌΧΙ Κυριακές, 5μέρες/εβδ) 📆\n• Μέχρι **8 ώρες την ημέρα** ⏱️\n• Το ωράριο ορίζεται από τη δομή σε συνεργασία μαζί σας\n\n**💡 Υπολογισμός:** 240 ώρες = περίπου 6 εβδομάδες x 40 ώρες ή 8 εβδομάδες x 30 ώρες",
+                "keywords": ["ώρες", "ωρες", "240", "ποσες", "πόσες", "ποσα", "ποσά", "συνολικά", "συνολικα", "όλες", "ολες", "τελικά", "τελικα", "χρονοδιάγραμμα", "χρονοδιαγραμμα", "διάρκεια", "διαρκεια", "χρόνος", "χρονος", "30/5", "deadline"]
             }
         ]
 
@@ -311,28 +273,13 @@ class InternshipChatbot:
 def initialize_qa_file():
     """Create initial qa_data.json if it doesn't exist (fallback for development)"""
     if not os.path.exists("qa_data.json"):
-        print("📄 Creating initial qa_data.json file for development...")
-        initial_data = [
-            {
-                "id": 1,
-                "category": "Γενικές Πληροφορίες",
-                "question": "Πώς ξεκινάω την πρακτική μου άσκηση;",
-                "answer": "**Βήμα 1:** Επικοινωνήστε με τον υπεύθυνο **Γεώργιο Σοφιανίδη** στο gsofianidis@mitropolitiko.edu.gr\n\n**Βήμα 2:** Βρείτε δομή (γυμναστήριο, σωματείο, σχολείο) που σας ενδιαφέρει\n\n**Βήμα 3:** Ετοιμάστε τα απαραίτητα έγγραφα (αίτηση, ασφαλιστική ικανότητα, υπεύθυνη δήλωση)\n\n**Σημαντικό:** Χρειάζεστε να ολοκληρώσετε **240 ώρες μέχρι 30/4**. Το κολλέγιο καλύπτει όλα τα έξοδα της σύμβασης.",
-                "keywords": ["ξεκινάω", "ξεκινω", "αρχή", "αρχίζω", "πρακτική", "άσκηση", "πώς", "πως", "βήματα"]
-            }
-        ]
-        
-        try:
-            with open("qa_data.json", 'w', encoding='utf-8') as f:
-                json.dump(initial_data, f, ensure_ascii=False, indent=2)
-            print("✅ Initial qa_data.json created for development")
-        except Exception as e:
-            print(f"❌ Error creating qa_data.json: {e}")
+        print("📄 qa_data.json not found. Please create it with the full 41 entries.")
+        print("💡 Place the complete JSON file in the same directory as this script.")
+        return False
+    return True
 
 def main():
     """Main Streamlit application - Git-first content management"""
-    # Initialize QA file if needed (development fallback)
-    initialize_qa_file()
     
     # CSS Styling
     st.markdown("""
@@ -533,7 +480,7 @@ def main():
     st.markdown("""
     <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.6rem; margin-bottom: 1.5rem; text-align: center; font-size: 0.9rem;">
         <strong>Πληροφορίες:</strong> Χρησιμοποιήστε το αριστερό μενού για συχνές ερωτήσεις και επικοινωνία 👈<br>
-        <small>🔄 Τα δεδομένα ενημερώνονται αυτόματα από το Git repository</small>
+        <small>🔄 Τα δεδομένα φορτώνονται από το qa_data.json αρχείο</small>
     </div>
     """, unsafe_allow_html=True)
 
@@ -592,23 +539,59 @@ def main():
             st.session_state.messages = []
             st.rerun()
 
-        # Τεχνικές πληροφορίες
+        # Enhanced Technical Information
         if st.checkbox("🔧 Τεχνικές Πληροφορίες"):
             st.markdown("**Για τεχνικά προβλήματα:**")
             st.markdown("📧 gbouchouras@mitropolitiko.edu.gr")
-            st.write("Groq Available:", GROQ_AVAILABLE)
-            st.write("Groq Client:", st.session_state.chatbot.groq_client is not None)
-            st.write("QA Data Count:", len(st.session_state.chatbot.qa_data))
             
-            # Check data source
-            if os.path.exists("qa_data.json"):
-                mtime = os.path.getmtime("qa_data.json")
-                last_modified = datetime.datetime.fromtimestamp(mtime).strftime("%d/%m/%Y %H:%M")
-                st.success(f"📄 Data Source: qa_data.json (από Git)")
-                st.info(f"🕒 Τελευταία ενημέρωση: {last_modified}")
+            # Enhanced debugging info
+            st.write("**System Status:**")
+            st.write("• Groq Available:", GROQ_AVAILABLE)
+            st.write("• Groq Client:", st.session_state.chatbot.groq_client is not None)
+            st.write("• QA Data Count:", len(st.session_state.chatbot.qa_data))
+            
+            # File status
+            qa_file_exists = os.path.exists("qa_data.json")
+            st.write("• qa_data.json exists:", qa_file_exists)
+            
+            if qa_file_exists:
+                try:
+                    with open("qa_data.json", 'r', encoding='utf-8') as f:
+                        file_data = json.load(f)
+                    st.success(f"📄 External JSON: {len(file_data)} entries loaded")
+                    st.write(f"• Entry IDs: {[d['id'] for d in file_data[:5]]}")
+                    if len(file_data) > 5:
+                        st.write(f"• ... and {len(file_data)-5} more")
+                    
+                    # File info
+                    file_size = os.path.getsize("qa_data.json")
+                    mtime = os.path.getmtime("qa_data.json")
+                    last_modified = datetime.datetime.fromtimestamp(mtime).strftime("%d/%m/%Y %H:%M")
+                    st.info(f"📊 File size: {file_size:,} bytes")
+                    st.info(f"🕒 Last modified: {last_modified}")
+                    
+                except Exception as e:
+                    st.error(f"❌ JSON Error: {e}")
             else:
-                st.warning("📋 Data Source: Embedded (fallback)")
-                st.info("💡 Για ενημέρωση: git pull + redeploy")
+                st.warning("📋 Using fallback data")
+                st.error("💡 Create qa_data.json with 41 entries!")
+            
+            # Directory info
+            st.write("**File System:**")
+            st.write("• Current dir:", os.getcwd())
+            files = [f for f in os.listdir('.') if f.endswith('.json')]
+            st.write("• JSON files:", files if files else "None found")
+            
+            # Categories info
+            if st.session_state.chatbot.qa_data:
+                categories_count = {}
+                for qa in st.session_state.chatbot.qa_data:
+                    cat = qa.get('category', 'Unknown')
+                    categories_count[cat] = categories_count.get(cat, 0) + 1
+                
+                st.write("**Categories:**")
+                for cat, count in categories_count.items():
+                    st.write(f"• {cat}: {count}")
 
     # Chat interface
     st.markdown('<div class="chat-container">', unsafe_allow_html=True)
