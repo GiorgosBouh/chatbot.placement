@@ -84,7 +84,7 @@ class InternshipChatbot:
 
     @st.cache_data
     def load_qa_data_from_file(_self, filename: str = "qa_data.json", _mtime: float = None) -> List[Dict]:
-        """Load Q&A data from JSON file with caching based on file modification time"""
+        """Load Q&A data from Git repository file with smart caching"""
         try:
             if os.path.exists(filename):
                 with open(filename, 'r', encoding='utf-8') as f:
@@ -623,22 +623,28 @@ def main():
             content = message["content"].replace('\n', '<br>')
             st.markdown(f'<div class="ai-message"><strong>🤖 Assistant:</strong><br><br>{content}</div>', unsafe_allow_html=True)
 
-    # Chat input
-    if prompt := st.chat_input("Γράψτε την ερώτησή σας εδώ..."):
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Chat input - moved outside container for better functionality
+    user_input = st.chat_input("Γράψτε την ερώτησή σας εδώ...")
+    
+    if user_input:
         # Add user message
-        st.session_state.messages.append({"role": "user", "content": prompt})
+        st.session_state.messages.append({"role": "user", "content": user_input})
         
         # Get chatbot response
         with st.spinner("Σκέφτομαι..."):
-            response = st.session_state.chatbot.get_response(prompt)
+            try:
+                response = st.session_state.chatbot.get_response(user_input)
+            except Exception as e:
+                response = f"Συγγνώμη, παρουσιάστηκε σφάλμα: {str(e)}"
+                st.error(f"Σφάλμα: {e}")
         
         # Add assistant response
         st.session_state.messages.append({"role": "assistant", "content": response})
         
         # Rerun to display new messages
         st.rerun()
-
-    st.markdown('</div>', unsafe_allow_html=True)
 
     # Footer
     st.markdown("---")
@@ -653,4 +659,4 @@ def main():
     """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
-    main()
+    main()    main()
