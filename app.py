@@ -99,14 +99,14 @@ class InternshipChatbot:
             return []
 
     def load_qa_data(self) -> List[Dict]:
-        """Load Q&A data with fallback to embedded data"""
+        """Load Q&A data with auto-detection from Git repository"""
         # Get file modification time for cache invalidation
         filename = "qa_data.json"
         mtime = None
         if os.path.exists(filename):
             mtime = os.path.getmtime(filename)
         
-        # First try to load from external file
+        # First try to load from Git repository file
         qa_data = self.load_qa_data_from_file(filename, _mtime=mtime)
         
         if qa_data:
@@ -309,9 +309,9 @@ class InternshipChatbot:
         return self.get_fallback_response(question)
 
 def initialize_qa_file():
-    """Create initial qa_data.json if it doesn't exist"""
+    """Create initial qa_data.json if it doesn't exist (fallback for development)"""
     if not os.path.exists("qa_data.json"):
-        print("📄 Creating initial qa_data.json file...")
+        print("📄 Creating initial qa_data.json file for development...")
         initial_data = [
             {
                 "id": 1,
@@ -325,13 +325,13 @@ def initialize_qa_file():
         try:
             with open("qa_data.json", 'w', encoding='utf-8') as f:
                 json.dump(initial_data, f, ensure_ascii=False, indent=2)
-            print("✅ Initial qa_data.json created successfully")
+            print("✅ Initial qa_data.json created for development")
         except Exception as e:
             print(f"❌ Error creating qa_data.json: {e}")
 
 def main():
-    """Main Streamlit application"""
-    # Initialize QA file if needed
+    """Main Streamlit application - Git-first content management"""
+    # Initialize QA file if needed (development fallback)
     initialize_qa_file()
     
     # CSS Styling
@@ -532,7 +532,8 @@ def main():
     # Επαγγελματική ενδειξη για sidebar
     st.markdown("""
     <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.6rem; margin-bottom: 1.5rem; text-align: center; font-size: 0.9rem;">
-        <strong>Πληροφορίες:</strong> Χρησιμοποιήστε το αριστερό μενού για συχνές ερωτήσεις και επικοινωνία 👈
+        <strong>Πληροφορίες:</strong> Χρησιμοποιήστε το αριστερό μενού για συχνές ερωτήσεις και επικοινωνία 👈<br>
+        <small>🔄 Τα δεδομένα ενημερώνονται αυτόματα από το Git repository</small>
     </div>
     """, unsafe_allow_html=True)
 
@@ -586,39 +587,6 @@ def main():
                 st.error("Groq library δεν είναι διαθέσιμη")
 
         st.markdown("---")
-        
-        # File upload για Q&A data
-        with st.expander("📁 Ενημέρωση Δεδομένων"):
-            st.markdown("""
-            **Για διαχειριστές:** Μπορείτε να ανεβάσετε νέο qa_data.json αρχείο για ενημέρωση των ερωτήσεων και απαντήσεων.
-            """)
-            
-            uploaded_file = st.file_uploader(
-                "Επιλέξτε qa_data.json αρχείο", 
-                type=['json'],
-                help="Ανεβάστε το ενημερωμένο JSON αρχείο με τις ερωτήσεις και απαντήσεις"
-            )
-            
-            if uploaded_file is not None:
-                try:
-                    # Save uploaded file
-                    with open("qa_data.json", "wb") as f:
-                        f.write(uploaded_file.getbuffer())
-                    
-                    # Clear cache to force reload
-                    st.cache_data.clear()
-                    
-                    st.success("✅ Αρχείο ενημερώθηκε και cache καθαρίστηκε!")
-                    st.info("🔄 Τα νέα δεδομένα θα φορτωθούν στην επόμενη ερώτηση")
-                    
-                except Exception as e:
-                    st.error(f"❌ Σφάλμα κατά την αποθήκευση: {e}")
-            
-            # Manual refresh button
-            if st.button("🔄 Ανανέωση Δεδομένων", help="Φορτώνει ξανά το qa_data.json αρχείο"):
-                st.cache_data.clear()
-                st.success("✅ Cache καθαρίστηκε! Τα δεδομένα θα φορτωθούν ξανά.")
-                st.rerun()
 
         if st.button("🗑️ Νέα Συνομιλία", use_container_width=True):
             st.session_state.messages = []
@@ -636,10 +604,11 @@ def main():
             if os.path.exists("qa_data.json"):
                 mtime = os.path.getmtime("qa_data.json")
                 last_modified = datetime.datetime.fromtimestamp(mtime).strftime("%d/%m/%Y %H:%M")
-                st.success(f"📄 Data Source: qa_data.json")
+                st.success(f"📄 Data Source: qa_data.json (από Git)")
                 st.info(f"🕒 Τελευταία ενημέρωση: {last_modified}")
             else:
-                st.warning("📋 Data Source: Embedded")
+                st.warning("📋 Data Source: Embedded (fallback)")
+                st.info("💡 Για ενημέρωση: git pull + redeploy")
 
     # Chat interface
     st.markdown('<div class="chat-container">', unsafe_allow_html=True)
