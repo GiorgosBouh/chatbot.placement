@@ -67,7 +67,7 @@ class InternshipChatbot:
         # Load Q&A data
         self.qa_data = self.load_qa_data()
         
-        # Initialize PDF files cache
+        # Initialize PDF files cache - same names as DOCX but with .pdf extension
         self.pdf_cache = {}
         self.pdf_files = [
             "1.ΑΙΤΗΣΗ ΠΡΑΓΜΑΤΟΠΟΙΗΣΗΣ ΠΡΑΚΤΙΚΗΣ ΑΣΚΗΣΗΣ.pdf",
