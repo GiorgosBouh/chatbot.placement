@@ -189,7 +189,7 @@ class InternshipChatbot:
                 "id": 11,
                 "category": "Επικοινωνία",
                 "question": "Με ποιον επικοινωνώ για την πρακτική άσκηση;",
-                "answer": "ΚΥΡΙΑ ΕΠΙΚΟΙΝΩΝΙΑ:\n\nΓεώργιος Σοφιανίδης, MSc, PhD\n📧 gsofianidis@mitropolitiko.edu.gr\nΥπεύθυνος Πρακτικής Άσκησης\n\nΕΝΑΛΛΑΚΤΙΚΗ ΕΠΙΚΟΙΝΩΝΙΑ:\n\nΓεώργιος Μπουχουράς, MSc, PhD\n📧 gbouchouras@mitropolitiko.edu.gr\n📞 2314 409000\nYear Tutor\n\nΠότε να επικοινωνήσετε:\n• Ερωτήσεις για έγγραφα ➜ Γεώργιος Σοφιανίδης\n• Τεχνικά προβλήματα ➜ Γεώργιος Μπουχουράς",
+                "answer": "ΚΥΡΙΑ ΕΠΙΚΟΙΝΩΝΙΑ:\n\nΓεώργιος Σοφιανίδης, MSc, PhD(c)\n📧 gsofianidis@mitropolitiko.edu.gr\nΥπεύθυνος Πρακτικής Άσκησης\n\nΕΝΑΛΛΑΚΤΙΚΗ ΕΠΙΚΟΙΝΩΝΙΑ:\n\nΓεώργιος Μπουχουράς, MSc, PhD\n📧 gbouchouras@mitropolitiko.edu.gr\n📞 2314 409000\nProgramme Leader\n\nΠότε να επικοινωνήσετε:\n• Ερωτήσεις για έγγραφα ➜ Γεώργιος Σοφιανίδης\n• Τεχνικά προβλήματα ➜ Γεώργιος Σοφιανίδης\n• Θέματα προγράμματος ➜ Γεώργιος Μπουχουράς",
                 "keywords": ["επικοινωνία", "επικοινωνια", "Σοφιανίδης", "Σοφιανιδης", "Μπουχουράς", "Μπουχουρας", "email", "τηλέφωνο", "τηλεφωνο", "υπεύθυνος", "υπευθυνος", "βοήθεια", "βοηθεια", "καθηγητής", "καθηγητης", "καθηγήτρια", "καθηγητρια", "contact", "στοιχεία", "στοιχεια"]
             },
             {
@@ -303,7 +303,44 @@ class InternshipChatbot:
             print("⚠️ No relevant PDF content found")
             return ""
 
-    def get_ai_response_with_pdf(self, user_message: str) -> Tuple[str, bool]:
+    def get_general_ai_response(self, user_message: str) -> Tuple[str, bool]:
+        """Get general AI response using LLM's own knowledge"""
+        if not self.groq_client:
+            return "", False
+        
+        try:
+            # General prompt that allows AI to use its knowledge
+            general_prompt = f"""Ερώτηση φοιτητή για πρακτική άσκηση: {user_message}
+
+Απάντησε με βάση τη γενική γνώση για την πρακτική άσκηση στην Ελλάδα. 
+Δώσε μια λογική και χρήσιμη απάντηση στα ελληνικά.
+Αν δεν ξέρεις κάτι συγκεκριμένο, πες ότι χρειάζεται επιβεβαίωση από τον υπεύθυνο πρακτικής."""
+
+            # Call Groq API
+            chat_completion = self.groq_client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": self.system_prompt},
+                    {"role": "user", "content": general_prompt}
+                ],
+                model="llama-3.1-8b-instant",
+                temperature=0.3,
+                max_tokens=600,
+                top_p=0.9,
+                stream=False
+            )
+
+            response = chat_completion.choices[0].message.content
+            
+            # Έλεγχος για μη-ελληνικούς χαρακτήρες
+            if response and any(ord(char) > 1500 and ord(char) not in range(0x0370, 0x03FF) for char in response):
+                print("⚠️ Detected non-Greek characters in general AI response")
+                return "", False
+            
+            return response, True
+            
+        except Exception as e:
+            print(f"❌ General AI Error: {e}")
+            return "", False
         """Get AI response using PDF files as context"""
         if not self.groq_client:
             return "", False
@@ -426,7 +463,7 @@ class InternshipChatbot:
 • Επικοινωνήστε με τον Γεώργιο Σοφιανίδη: gsofianidis@mitropolitiko.edu.gr""", False
 
     def get_response(self, question: str) -> str:
-        """Get chatbot response - JSON FIRST, then PDF AI, then JSON fallback"""
+        """Get chatbot response - JSON FIRST, then PDF AI, then General AI, then JSON fallback"""
         if not self.qa_data:
             return "Δεν υπάρχουν διαθέσιμα δεδομένα γνώσης."
         
@@ -446,8 +483,17 @@ class InternshipChatbot:
                 print("✅ PDF AI response successful")
                 return pdf_response
         
-        # Step 3: Try regular AI with JSON context (fallback)
-        print("🤖 PDF search failed, trying regular AI...")
+        # Step 3: Try General AI with context (NEW!)
+        print("🤖 PDF search failed, trying General AI...")
+        
+        if self.groq_client:
+            general_ai_response, success = self.get_general_ai_response(question)
+            if success and general_ai_response.strip():
+                print("✅ General AI response successful")
+                return general_ai_response
+        
+        # Step 4: Try regular AI with JSON context (fallback)
+        print("🔄 General AI failed, trying AI with JSON context...")
         
         if self.groq_client:
             # Find relevant context for AI
@@ -469,7 +515,7 @@ class InternshipChatbot:
                     print("✅ Regular AI response successful")
                     return ai_response
         
-        # Step 4: Final fallback to JSON (even if low similarity)
+        # Step 5: Final fallback to JSON (even if low similarity)
         print("📋 Using JSON fallback response")
         return json_response
 
@@ -702,7 +748,7 @@ def main():
             st.markdown('<div class="api-status">📋 JSON First Mode</div>', unsafe_allow_html=True)
         
     # Επαγγελματική ενδειξη για sidebar
-    status_text = "JSON → PDF → AI" if PDF_AVAILABLE else "JSON → AI"
+    status_text = "JSON → PDF → AI → Fallback" if PDF_AVAILABLE else "JSON → AI → Fallback"
     st.markdown(f"""
     <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.6rem; margin-bottom: 1.5rem; text-align: center; font-size: 0.9rem;">
         <strong>Πληροφορίες:</strong> Χρησιμοποιήστε το αριστερό μενού για συχνές ερωτήσεις και επικοινωνία 👈<br>
@@ -776,7 +822,7 @@ def main():
             
             # Enhanced debugging info
             st.write("**System Status:**")
-            st.write("• Response Priority: JSON → PDF → AI")
+            st.write("• Response Priority: JSON → PDF → General AI → JSON Fallback")
             st.write("• Groq Available:", GROQ_AVAILABLE)
             st.write("• Groq Client:", st.session_state.chatbot.groq_client is not None)
             st.write("• PDF Available:", PDF_AVAILABLE)
