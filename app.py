@@ -18,15 +18,24 @@ except ImportError:
     Groq = None
     print("⚠️ Groq library not available. Using fallback mode only.")
 
-# Import python-docx with fallback handling
+# Import PyPDF2 with fallback handling  
 try:
-    from docx import Document
-    DOCX_AVAILABLE = True
-    print("✅ python-docx library imported successfully")
+    import PyPDF2
+    PDF_AVAILABLE = True
+    PDF_METHOD = "PyPDF2"
+    print("✅ PyPDF2 library imported successfully")
 except ImportError:
-    DOCX_AVAILABLE = False
-    Document = None
-    print("⚠️ python-docx library not available. DOCX search disabled.")
+    try:
+        import fitz  # PyMuPDF
+        PDF_AVAILABLE = True
+        PDF_METHOD = "PyMuPDF"
+        print("✅ PyMuPDF library imported successfully (fallback)")
+    except ImportError:
+        PDF_AVAILABLE = False
+        PDF_METHOD = None
+        PyPDF2 = None
+        fitz = None
+        print("⚠️ No PDF library available. PDF search disabled.")
 
 # Ρύθμιση σελίδας
 st.set_page_config(
@@ -58,16 +67,16 @@ class InternshipChatbot:
         # Load Q&A data
         self.qa_data = self.load_qa_data()
         
-        # Initialize DOCX files cache
-        self.docx_cache = {}
-        self.docx_files = [
-            "1.ΑΙΤΗΣΗ ΠΡΑΓΜΑΤΟΠΟΙΗΣΗΣ ΠΡΑΚΤΙΚΗΣ ΑΣΚΗΣΗΣ.DOCX",
-            "2.ΣΤΟΙΧΕΙΑ ΔΟΜΗΣ_ΟΔΗΓΙΕΣ.docx", 
-            "3.ΣΤΟΙΧΕΙΑ ΦΟΙΤΗΤΗ.docx",
-            "4.ΣΤΟΙΧΕΙΑ ΦΟΡΕΑ.docx",
-            "5.ΑΣΦΑΛΙΣΤΙΚΗ ΙΚΑΝΟΤΗΤΑ.docx",
-            "6.ΥΠΕΥΘΥΝΗ ΔΗΛΩΣΗ Ν 105-Πρακτικής.docx",
-            "8.ΒΙΒΛΙΟ_ΠΡΑΚΤΙΚΗΣ_final.docx"
+        # Initialize PDF files cache
+        self.pdf_cache = {}
+        self.pdf_files = [
+            "1.ΑΙΤΗΣΗ ΠΡΑΓΜΑΤΟΠΟΙΗΣΗΣ ΠΡΑΚΤΙΚΗΣ ΑΣΚΗΣΗΣ.pdf",
+            "2.ΣΤΟΙΧΕΙΑ ΔΟΜΗΣ_ΟΔΗΓΙΕΣ.pdf", 
+            "3.ΣΤΟΙΧΕΙΑ ΦΟΙΤΗΤΗ.pdf",
+            "4.ΣΤΟΙΧΕΙΑ ΦΟΡΕΑ.pdf",
+            "5.ΑΣΦΑΛΙΣΤΙΚΗ ΙΚΑΝΟΤΗΤΑ.pdf",
+            "6.ΥΠΕΥΘΥΝΗ ΔΗΛΩΣΗ Ν 105-Πρακτικής.pdf",
+            "8.ΒΙΒΛΙΟ_ΠΡΑΚΤΙΚΗΣ_final.pdf"
         ]
         
         # System prompt για το LM
@@ -192,48 +201,65 @@ class InternshipChatbot:
             }
         ]
 
-    def download_docx_file(self, filename: str) -> str:
-        """Download and extract text from DOCX file from GitHub"""
-        if not DOCX_AVAILABLE:
-            print(f"⚠️ python-docx not available, cannot process {filename}")
+    def download_pdf_file(self, filename: str) -> str:
+        """Download and extract text from PDF file from GitHub"""
+        if not PDF_AVAILABLE:
+            print(f"⚠️ No PDF library available, cannot process {filename}")
             return ""
         
         # Check cache first
-        if filename in self.docx_cache:
+        if filename in self.pdf_cache:
             print(f"📋 Using cached content for {filename}")
-            return self.docx_cache[filename]
+            return self.pdf_cache[filename]
         
         try:
             # GitHub raw URL
             base_url = "https://raw.githubusercontent.com/GiorgosBouh/chatbot.placement/main/"
             url = base_url + filename
             
-            print(f"🔍 Downloading {filename} from GitHub...")
+            print(f"🔍 Downloading {filename} from GitHub using {PDF_METHOD}...")
             
             # Download file
             response = requests.get(url, timeout=10)
             response.raise_for_status()
             
-            # Parse DOCX
-            doc = Document(io.BytesIO(response.content))
-            
-            # Extract text from all paragraphs
+            # Extract text based on available library
             text_content = []
-            for paragraph in doc.paragraphs:
-                if paragraph.text.strip():
-                    text_content.append(paragraph.text.strip())
             
-            # Extract text from tables
-            for table in doc.tables:
-                for row in table.rows:
-                    for cell in row.cells:
-                        if cell.text.strip():
-                            text_content.append(cell.text.strip())
+            if PDF_METHOD == "PyPDF2":
+                # Use PyPDF2
+                pdf_reader = PyPDF2.PdfReader(io.BytesIO(response.content))
+                
+                for page_num, page in enumerate(pdf_reader.pages):
+                    try:
+                        page_text = page.extract_text()
+                        if page_text.strip():
+                            text_content.append(page_text.strip())
+                    except Exception as e:
+                        print(f"⚠️ Error extracting page {page_num}: {e}")
+                
+            elif PDF_METHOD == "PyMuPDF":
+                # Use PyMuPDF (fitz)
+                pdf_document = fitz.open(stream=response.content, filetype="pdf")
+                
+                for page_num in range(pdf_document.page_count):
+                    try:
+                        page = pdf_document[page_num]
+                        page_text = page.get_text()
+                        if page_text.strip():
+                            text_content.append(page_text.strip())
+                    except Exception as e:
+                        print(f"⚠️ Error extracting page {page_num}: {e}")
+                
+                pdf_document.close()
+            
+            else:
+                return ""
             
             full_text = "\n".join(text_content)
             
             # Cache the content
-            self.docx_cache[filename] = full_text
+            self.pdf_cache[filename] = full_text
             
             print(f"✅ Successfully processed {filename} ({len(full_text)} characters)")
             return full_text
@@ -245,18 +271,18 @@ class InternshipChatbot:
             print(f"❌ Failed to process {filename}: {e}")
             return ""
 
-    def search_docx_files(self, question: str) -> str:
-        """Search through all DOCX files and compile context"""
-        if not DOCX_AVAILABLE:
+    def search_pdf_files(self, question: str) -> str:
+        """Search through all PDF files and compile context"""
+        if not PDF_AVAILABLE:
             return ""
         
-        print("📄 Searching DOCX files...")
+        print("📄 Searching PDF files...")
         
         context_parts = []
         question_lower = question.lower()
         
-        for filename in self.docx_files:
-            content = self.download_docx_file(filename)
+        for filename in self.pdf_files:
+            content = self.download_pdf_file(filename)
             if content:
                 # Simple relevance check - if question keywords appear in content
                 content_lower = content.lower()
@@ -274,25 +300,25 @@ class InternshipChatbot:
         if context_parts:
             return "\n\n".join(context_parts)
         else:
-            print("⚠️ No relevant DOCX content found")
+            print("⚠️ No relevant PDF content found")
             return ""
 
-    def get_ai_response_with_docx(self, user_message: str) -> Tuple[str, bool]:
-        """Get AI response using DOCX files as context"""
+    def get_ai_response_with_pdf(self, user_message: str) -> Tuple[str, bool]:
+        """Get AI response using PDF files as context"""
         if not self.groq_client:
             return "", False
         
         try:
-            # Get DOCX context
-            docx_context = self.search_docx_files(user_message)
+            # Get PDF context
+            pdf_context = self.search_pdf_files(user_message)
             
-            if not docx_context:
+            if not pdf_context:
                 return "", False
             
             # Prepare the full prompt
             full_prompt = f"""Βάσει των παρακάτω εγγράφων πρακτικής άσκησης:
 
-{docx_context}
+{pdf_context}
 
 Ερώτηση φοιτητή: {user_message}
 
@@ -321,7 +347,7 @@ class InternshipChatbot:
             return response, True
             
         except Exception as e:
-            print(f"❌ DOCX AI Error: {e}")
+            print(f"❌ PDF AI Error: {e}")
             return "", False
 
     def calculate_similarity(self, question: str, qa_entry: Dict) -> float:
@@ -400,7 +426,7 @@ class InternshipChatbot:
 • Επικοινωνήστε με τον Γεώργιο Σοφιανίδη: gsofianidis@mitropolitiko.edu.gr""", False
 
     def get_response(self, question: str) -> str:
-        """Get chatbot response - JSON FIRST, then DOCX AI, then JSON fallback"""
+        """Get chatbot response - JSON FIRST, then PDF AI, then JSON fallback"""
         if not self.qa_data:
             return "Δεν υπάρχουν διαθέσιμα δεδομένα γνώσης."
         
@@ -411,17 +437,17 @@ class InternshipChatbot:
             print("✅ Found exact match in JSON data")
             return json_response
         
-        # Step 2: Try DOCX AI search
-        print("📄 No good JSON match, trying DOCX AI search...")
+        # Step 2: Try PDF AI search
+        print("📄 No good JSON match, trying PDF AI search...")
         
-        if self.groq_client and DOCX_AVAILABLE:
-            docx_response, success = self.get_ai_response_with_docx(question)
-            if success and docx_response.strip():
-                print("✅ DOCX AI response successful")
-                return docx_response
+        if self.groq_client and PDF_AVAILABLE:
+            pdf_response, success = self.get_ai_response_with_pdf(question)
+            if success and pdf_response.strip():
+                print("✅ PDF AI response successful")
+                return pdf_response
         
         # Step 3: Try regular AI with JSON context (fallback)
-        print("🤖 DOCX search failed, trying regular AI...")
+        print("🤖 PDF search failed, trying regular AI...")
         
         if self.groq_client:
             # Find relevant context for AI
@@ -670,16 +696,17 @@ def main():
 
     # API Status
     if st.session_state.chatbot.groq_client:
-        if DOCX_AVAILABLE:
-            st.markdown('<div class="api-status">📋 JSON + DOCX Mode</div>', unsafe_allow_html=True)
+        if PDF_AVAILABLE:
+            st.markdown(f'<div class="api-status">📋 JSON + PDF ({PDF_METHOD})</div>', unsafe_allow_html=True)
         else:
             st.markdown('<div class="api-status">📋 JSON First Mode</div>', unsafe_allow_html=True)
         
     # Επαγγελματική ενδειξη για sidebar
-    st.markdown("""
+    status_text = "JSON → PDF → AI" if PDF_AVAILABLE else "JSON → AI"
+    st.markdown(f"""
     <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.6rem; margin-bottom: 1.5rem; text-align: center; font-size: 0.9rem;">
         <strong>Πληροφορίες:</strong> Χρησιμοποιήστε το αριστερό μενού για συχνές ερωτήσεις και επικοινωνία 👈<br>
-        <small>🔄 Προτεραιότητα: JSON → DOCX → AI</small>
+        <small>🔄 Προτεραιότητα: {status_text}</small>
     </div>
     """, unsafe_allow_html=True)
 
@@ -723,16 +750,16 @@ def main():
 
         # AI Status
         if st.session_state.chatbot.groq_client:
-            if DOCX_AVAILABLE:
-                st.success("📋 JSON + DOCX Mode")
+            if PDF_AVAILABLE:
+                st.success(f"📋 JSON + PDF Mode ({PDF_METHOD})")
                 st.info("AI ψάχνει σε επίσημα έγγραφα")
             else:
                 st.success("📋 JSON First Mode")
-                st.warning("DOCX search απενεργοποιημένο")
+                st.warning("PDF search απενεργοποιημένο")
         else:
             st.warning("📚 JSON Only Mode")
             if GROQ_AVAILABLE:
-                st.info("Για AI+DOCX, χρειάζεται Groq API key")
+                st.info("Για AI+PDF, χρειάζεται Groq API key")
             else:
                 st.error("Groq library δεν είναι διαθέσιμη")
 
@@ -749,24 +776,27 @@ def main():
             
             # Enhanced debugging info
             st.write("**System Status:**")
-            st.write("• Response Priority: JSON → DOCX → AI")
+            st.write("• Response Priority: JSON → PDF → AI")
             st.write("• Groq Available:", GROQ_AVAILABLE)
             st.write("• Groq Client:", st.session_state.chatbot.groq_client is not None)
-            st.write("• DOCX Available:", DOCX_AVAILABLE)
+            st.write("• PDF Available:", PDF_AVAILABLE)
+            if PDF_AVAILABLE:
+                st.write("• PDF Method:", PDF_METHOD)
             st.write("• QA Data Count:", len(st.session_state.chatbot.qa_data))
             
-            # DOCX Status
-            if DOCX_AVAILABLE:
-                st.write("**DOCX Files:**")
-                for filename in st.session_state.chatbot.docx_files:
-                    cached = "📋" if filename in st.session_state.chatbot.docx_cache else "⏳"
+            # PDF Status
+            if PDF_AVAILABLE:
+                st.write("**PDF Files:**")
+                for filename in st.session_state.chatbot.pdf_files:
+                    cached = "📋" if filename in st.session_state.chatbot.pdf_cache else "⏳"
                     st.write(f"• {cached} {filename}")
                 
-                if st.session_state.chatbot.docx_cache:
-                    total_chars = sum(len(content) for content in st.session_state.chatbot.docx_cache.values())
-                    st.info(f"📊 Cached DOCX content: {total_chars:,} characters")
+                if st.session_state.chatbot.pdf_cache:
+                    total_chars = sum(len(content) for content in st.session_state.chatbot.pdf_cache.values())
+                    st.info(f"📊 Cached PDF content: {total_chars:,} characters")
             else:
-                st.error("📄 DOCX processing disabled - install python-docx")
+                st.error("📄 PDF processing disabled")
+                st.info("💡 Install: pip install PyPDF2")
             
             # File status
             qa_file_exists = os.path.exists("qa_data.json")
@@ -848,13 +878,13 @@ def main():
         st.rerun()
 
     # Footer
-    st.markdown("---")
-    st.markdown("""
+    footer_text = "JSON-First + PDF AI Assistant" if PDF_AVAILABLE else "JSON-First AI Assistant"
+    st.markdown(f"""
     <div style="text-align: center; color: #6c757d; padding: 1rem;">
         <small>
             🎓 <strong>Μητροπολιτικό Κολλέγιο Θεσσαλονίκης</strong> | 
             Τμήμα Προπονητικής & Φυσικής Αγωγής<br>
-            <em>JSON-First + DOCX AI Assistant</em>
+            <em>{footer_text}</em>
         </small>
     </div>
     """, unsafe_allow_html=True)
