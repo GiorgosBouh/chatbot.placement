@@ -3,6 +3,8 @@ import json
 import re
 import os
 import datetime
+import requests
+import io
 from typing import List, Dict, Tuple
 from dataclasses import dataclass
 
@@ -15,6 +17,16 @@ except ImportError:
     GROQ_AVAILABLE = False
     Groq = None
     print("⚠️ Groq library not available. Using fallback mode only.")
+
+# Import python-docx with fallback handling
+try:
+    from docx import Document
+    DOCX_AVAILABLE = True
+    print("✅ python-docx library imported successfully")
+except ImportError:
+    DOCX_AVAILABLE = False
+    Document = None
+    print("⚠️ python-docx library not available. DOCX search disabled.")
 
 # Ρύθμιση σελίδας
 st.set_page_config(
@@ -45,6 +57,18 @@ class InternshipChatbot:
         
         # Load Q&A data
         self.qa_data = self.load_qa_data()
+        
+        # Initialize DOCX files cache
+        self.docx_cache = {}
+        self.docx_files = [
+            "1.ΑΙΤΗΣΗ ΠΡΑΓΜΑΤΟΠΟΙΗΣΗΣ ΠΡΑΚΤΙΚΗΣ ΑΣΚΗΣΗΣ.DOCX",
+            "2.ΣΤΟΙΧΕΙΑ ΔΟΜΗΣ_ΟΔΗΓΙΕΣ.docx", 
+            "3.ΣΤΟΙΧΕΙΑ ΦΟΙΤΗΤΗ.docx",
+            "4.ΣΤΟΙΧΕΙΑ ΦΟΡΕΑ.docx",
+            "5.ΑΣΦΑΛΙΣΤΙΚΗ ΙΚΑΝΟΤΗΤΑ.docx",
+            "6.ΥΠΕΥΘΥΝΗ ΔΗΛΩΣΗ Ν 105-Πρακτικής.docx",
+            "8.ΒΙΒΛΙΟ_ΠΡΑΚΤΙΚΗΣ_final.docx"
+        ]
         
         # System prompt για το LM
         self.system_prompt = """Είσαι ένας εξειδικευμένος σύμβουλος για θέματα πρακτικής άσκησης στο Μητροπολιτικό Κολλέγιο Θεσσαλονίκης, τμήμα Προπονητικής και Φυσικής Αγωγής.
@@ -135,38 +159,170 @@ class InternshipChatbot:
                 "id": 1,
                 "category": "Γενικές Πληροφορίες",
                 "question": "Πώς ξεκινάω την πρακτική μου άσκηση;",
-                "answer": "**📞 Βήμα 1:** Ενημερώνω τον υπεύθυνο **Γεώργιο Σοφιανίδη** (gsofianidis@mitropolitiko.edu.gr) για την **επιθυμία για έναρξη πρακτικής**\n\n**🏢 Βήμα 2:** Βρίσκω δομή (γυμναστήριο, σωματείο, σχολείο) **σύμφωνα με τη συζήτηση** που θα κάνω με τον υπεύθυνο της πρακτικής\n\n**📋 Βήμα 3:** Βρίσκω και κατεβάζω τα σχετικά έγγραφα από τη σχετική πύλη στο μάθημα **SPORTS COACHING PRACTICE & EXPERTISE DEVELOPMENT (SE5117)**\n\n**✍️ Βήμα 4:** **Συμπληρώνω** όλα τα απαραίτητα έγγραφα (αίτηση, ασφαλιστική ικανότητα, υπεύθυνη δήλωση, στοιχεία φορέα)\n\n**📤 Βήμα 5:** **Ανεβάζω** τα συμπληρωμένα έγγραφα στη σχετική πύλη προκειμένου να γίνει η σύμβασή μου\n\n**⏳ Βήμα 6:** **Περιμένω ενημέρωση** από τον υπεύθυνο πρακτικής ότι η σύμβαση έχει γίνει\n\n**🚀 ΕΝΑΡΞΗ:** **Μόλις η σύμβαση γίνει και ενημερωθώ** από τον υπεύθυνο πρακτικής, **τότε και μόνο τότε μπορώ να ξεκινήσω** την πρακτική άσκηση!",
+                "answer": "1. Επικοινωνώ με τον υπεύθυνο της πρακτικής: gsofianidis@mitropolitiko.edu.gr\n\n2. Βρίσκω τη δομή που θα κάνω πρακτική\n\n3. Κατεβάζω τα έγγραφα από το μάθημα SPORTS COACHING PRACTICE & EXPERTISE DEVELOPMENT (SE5117) στο Moodle. Τα συμπληρώνω και τα ανεβάζω ξανά στη σχετική πύλη στο μάθημα SPORTS COACHING PRACTICE & EXPERTISE DEVELOPMENT (SE5117) στο Moodle.\n\n4. Περιμένω την υπογραφή της σύμβασής μου και την ανάρτησή της στο ΕΡΓΑΝΗ\n\n5. Ξεκινάω την πρακτική",
                 "keywords": ["ξεκινάω", "ξεκινώ", "αρχή", "αρχίζω", "αρχίσω", "ξεκίνημα", "πρακτική", "άσκηση", "πώς", "πως", "βήματα", "διαδικασία", "διαδικασιες"]
             },
             {
                 "id": 2,
                 "category": "Έγγραφα & Διαδικασίες",
                 "question": "Τι έγγραφα χρειάζομαι για την πρακτική άσκηση;",
-                "answer": "**Για εσάς (φοιτητή):**\n• Αίτηση πραγματοποίησης πρακτικής άσκησης ✅\n• Στοιχεία φοιτητή (συμπληρωμένη φόρμα) ✅\n• **Ασφαλιστική ικανότητα** από gov.gr ⭐\n• **Υπεύθυνη δήλωση** (δεν παίρνετε επίδομα ΟΑΕΔ)\n\n**Για τη δομή:**\n• Στοιχεία φορέα (ΑΦΜ, διεύθυνση, νόμιμος εκπρόσωπος)\n• Ημέρες και ώρες που σας δέχεται\n\n**💡 Tip:** Ξεκινήστε από την ασφαλιστική ικανότητα γιατί παίρνει χρόνο!",
+                "answer": "Για εσάς (φοιτητή):\n• Αίτηση πραγματοποίησης πρακτικής άσκησης\n• Στοιχεία φοιτητή (συμπληρωμένη φόρμα)\n• Ασφαλιστική ικανότητα από gov.gr\n• Υπεύθυνη δήλωση (δεν παίρνετε επίδομα ΟΑΕΔ)\n\nΓια τη δομή:\n• Στοιχεία φορέα (ΑΦΜ, διεύθυνση, νόμιμος εκπρόσωπος)\n• Ημέρες και ώρες που σας δέχεται\n\nTip: Ξεκινήστε από την ασφαλιστική ικανότητα γιατί παίρνει χρόνο!",
                 "keywords": ["έγγραφα", "εγγραφα", "χαρτιά", "χαρτια", "χρειάζομαι", "χρειαζομαι", "απαιτήσεις", "απαιτησεις", "απαιτούνται", "απαιτουνται", "δικαιολογητικά", "δικαιολογητικα", "φάκελος", "φακελος", "αίτηση", "αιτηση"]
             },
             {
                 "id": 30,
                 "category": "Οικονομικά & Αμοιβή",
                 "question": "Παίρνω αμοιβή για την πρακτική άσκηση; Τι κόστος έχει για τη δομή;",
-                "answer": "**💰 ΓΙΑ ΤΟΥΣ ΦΟΙΤΗΤΕΣ:**\n\n❌ **ΔΕΝ υπάρχει αμοιβή** για την πρακτική άσκηση\n• Η πρακτική άσκηση είναι **μη αμειβόμενη**\n• Είναι μέρος των σπουδών σας\n• Δεν πρόκειται για εργασιακή σχέση\n\n**🏢 ΓΙΑ ΤΗ ΔΟΜΗ:**\n\n✅ **Η δομή δε χρεώνεται κάτι** (σχεδόν)\n• Υπάρχει ένα **ελάχιστο τέλος** που ενδεχομένως πρέπει να καταβάλει\n• Το κολλέγιο καλύπτει τα έξοδα της σύμβασης\n• Η ασφάλιση τιμολογείται στο κολλέγιο\n• Δεν υπάρχει οικονομική υποχρέωση προς τους φοιτητές",
+                "answer": "ΓΙΑ ΤΟΥΣ ΦΟΙΤΗΤΕΣ:\n\nΔΕΝ υπάρχει αμοιβή για την πρακτική άσκηση\n• Η πρακτική άσκηση είναι μη αμειβόμενη\n• Είναι μέρος των σπουδών σας\n• Δεν πρόκειται για εργασιακή σχέση\n\nΓΙΑ ΤΗ ΔΟΜΗ:\n\nΗ δομή δε χρεώνεται κάτι (σχεδόν)\n• Υπάρχει ένα ελάχιστο τέλος που ενδεχομένως πρέπει να καταβάλει\n• Το κολλέγιο καλύπτει τα έξοδα της σύμβασης\n• Η ασφάλιση τιμολογείται στο κολλέγιο\n• Δεν υπάρχει οικονομική υποχρέωση προς τους φοιτητές",
                 "keywords": ["αμοιβή", "αμοιβη", "πληρωμή", "πληρωμη", "πληρώθώ", "πληρωθώ", "πληρωθω", "πληρωνομαι", "πληρώνομαι", "λεφτά", "λεφτα", "χρήματα", "χρηματα", "κόστος", "κοστος", "τέλος", "τελος", "δομή", "δομη", "φοιτητής", "φοιτητη", "οικονομικά", "οικονομικα", "μισθός", "μισθος"]
             },
             {
                 "id": 11,
                 "category": "Επικοινωνία",
                 "question": "Με ποιον επικοινωνώ για την πρακτική άσκηση;",
-                "answer": "**👩‍🏫 ΚΥΡΙΑ ΕΠΙΚΟΙΝΩΝΙΑ:**\n\n**Γεώργιος Σοφιανίδης, MSc, PhD(c)**\n📧 gsofianidis@mitropolitiko.edu.gr\n🎯 Υπεύθυνος Πρακτικής Άσκησης\n\n**👨‍🏫 ΕΝΑΛΛΑΚΤΙΚΗ ΕΠΙΚΟΙΝΩΝΙΑ:**\n\n**Γεώργιος Μπουχουράς, MSc, PhD**\n📧 gbouchouras@mitropolitiko.edu.gr\n📞 2314 409000\n🎯 Programme Leader\n\n**Πότε να επικοινωνήσετε:**\n• Ερωτήσεις για έγγραφα ➜ **Γεώργιος Σοφιανίδης**\n• Τεχνικά προβλήματα ➜ **Γεώργιος Σοφιανίδης**\n• Θέματα προγράμματος ➜ **Γεώργιος Μπουχουράς**",
+                "answer": "ΚΥΡΙΑ ΕΠΙΚΟΙΝΩΝΙΑ:\n\nΓεώργιος Σοφιανίδης, MSc, PhD(c)\n📧 gsofianidis@mitropolitiko.edu.gr\nΥπεύθυνος Πρακτικής Άσκησης\n\nΕΝΑΛΛΑΚΤΙΚΗ ΕΠΙΚΟΙΝΩΝΙΑ:\n\nΓεώργιος Μπουχουράς, MSc, PhD\n📧 gbouchouras@mitropolitiko.edu.gr\n📞 2314 409000\nProgramme Leader\n\nΠότε να επικοινωνήσετε:\n• Ερωτήσεις για έγγραφα ➜ Γεώργιος Σοφιανίδης\n• Τεχνικά προβλήματα ➜ Γεώργιος Σοφιανίδης\n• Θέματα προγράμματος ➜ Γεώργιος Μπουχουράς",
                 "keywords": ["επικοινωνία", "επικοινωνια", "Σοφιανίδης", "Σοφιανιδης", "Μπουχουράς", "Μπουχουρας", "email", "τηλέφωνο", "τηλεφωνο", "υπεύθυνος", "υπευθυνος", "βοήθεια", "βοηθεια", "καθηγητής", "καθηγητης", "καθηγήτρια", "καθηγητρια", "contact", "στοιχεία", "στοιχεια"]
             },
             {
                 "id": 4,
                 "category": "Ώρες & Χρονοδιάγραμμα",
                 "question": "Πόσες ώρες πρέπει να κάνω πρακτική άσκηση;",
-                "answer": "**Υποχρεωτικό:** Τουλάχιστον **240 ώρες** ⏰\n\n**Deadline:** Μέχρι **30 Μάϊου** 📅\n\n**Κανόνες ωραρίου:**\n• Δευτέρα έως Σάββατο (ΌΧΙ Κυριακές, 5μέρες/εβδ) 📆\n• Μέχρι **8 ώρες την ημέρα** ⏱️\n• Το ωράριο ορίζεται από τη δομή σε συνεργασία μαζί σας\n\n**💡 Υπολογισμός:** 240 ώρες = περίπου 6 εβδομάδες x 40 ώρες ή 8 εβδομάδες x 30 ώρες",
+                "answer": "Υποχρεωτικό: Τουλάχιστον 240 ώρες\n\nDeadline: Μέχρι 30 Μάϊου\n\nΚανόνες ωραρίου:\n• Δευτέρα έως Σάββατο (ΌΧΙ Κυριακές, 5μέρες/εβδ)\n• Μέχρι 8 ώρες την ημέρα\n• Το ωράριο ορίζεται από τη δομή σε συνεργασία μαζί σας\n\nΥπολογισμός: 240 ώρες = περίπου 6 εβδομάδες x 40 ώρες ή 8 εβδομάδες x 30 ώρες",
                 "keywords": ["ώρες", "ωρες", "240", "ποσες", "πόσες", "ποσα", "ποσά", "συνολικά", "συνολικα", "όλες", "ολες", "τελικά", "τελικα", "χρονοδιάγραμμα", "χρονοδιαγραμμα", "διάρκεια", "διαρκεια", "χρόνος", "χρονος", "30/5", "deadline"]
             }
         ]
+
+    def download_docx_file(self, filename: str) -> str:
+        """Download and extract text from DOCX file from GitHub"""
+        if not DOCX_AVAILABLE:
+            print(f"⚠️ python-docx not available, cannot process {filename}")
+            return ""
+        
+        # Check cache first
+        if filename in self.docx_cache:
+            print(f"📋 Using cached content for {filename}")
+            return self.docx_cache[filename]
+        
+        try:
+            # GitHub raw URL
+            base_url = "https://raw.githubusercontent.com/GiorgosBouh/chatbot.placement/main/"
+            url = base_url + filename
+            
+            print(f"🔍 Downloading {filename} from GitHub...")
+            
+            # Download file
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            
+            # Parse DOCX
+            doc = Document(io.BytesIO(response.content))
+            
+            # Extract text from all paragraphs
+            text_content = []
+            for paragraph in doc.paragraphs:
+                if paragraph.text.strip():
+                    text_content.append(paragraph.text.strip())
+            
+            # Extract text from tables
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        if cell.text.strip():
+                            text_content.append(cell.text.strip())
+            
+            full_text = "\n".join(text_content)
+            
+            # Cache the content
+            self.docx_cache[filename] = full_text
+            
+            print(f"✅ Successfully processed {filename} ({len(full_text)} characters)")
+            return full_text
+            
+        except requests.RequestException as e:
+            print(f"❌ Failed to download {filename}: {e}")
+            return ""
+        except Exception as e:
+            print(f"❌ Failed to process {filename}: {e}")
+            return ""
+
+    def search_docx_files(self, question: str) -> str:
+        """Search through all DOCX files and compile context"""
+        if not DOCX_AVAILABLE:
+            return ""
+        
+        print("📄 Searching DOCX files...")
+        
+        context_parts = []
+        question_lower = question.lower()
+        
+        for filename in self.docx_files:
+            content = self.download_docx_file(filename)
+            if content:
+                # Simple relevance check - if question keywords appear in content
+                content_lower = content.lower()
+                
+                # Check for keyword matches
+                question_words = question_lower.split()
+                matches = sum(1 for word in question_words if len(word) > 2 and word in content_lower)
+                
+                if matches > 0:
+                    # Include relevant sections (first 1000 chars to avoid token limits)
+                    preview = content[:1000] + "..." if len(content) > 1000 else content
+                    context_parts.append(f"Από αρχείο {filename}:\n{preview}")
+                    print(f"✅ Found relevant content in {filename}")
+        
+        if context_parts:
+            return "\n\n".join(context_parts)
+        else:
+            print("⚠️ No relevant DOCX content found")
+            return ""
+
+    def get_ai_response_with_docx(self, user_message: str) -> Tuple[str, bool]:
+        """Get AI response using DOCX files as context"""
+        if not self.groq_client:
+            return "", False
+        
+        try:
+            # Get DOCX context
+            docx_context = self.search_docx_files(user_message)
+            
+            if not docx_context:
+                return "", False
+            
+            # Prepare the full prompt
+            full_prompt = f"""Βάσει των παρακάτω εγγράφων πρακτικής άσκησης:
+
+{docx_context}
+
+Ερώτηση φοιτητή: {user_message}
+
+Χρησιμοποίησε ΜΟΝΟ τις πληροφορίες από τα έγγραφα για να απαντήσεις."""
+
+            # Call Groq API
+            chat_completion = self.groq_client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": self.system_prompt},
+                    {"role": "user", "content": full_prompt}
+                ],
+                model="llama-3.1-8b-instant",
+                temperature=0.1,
+                max_tokens=800,
+                top_p=0.9,
+                stream=False
+            )
+
+            response = chat_completion.choices[0].message.content
+            
+            # Έλεγχος για μη-ελληνικούς χαρακτήρες
+            if response and any(ord(char) > 1500 and ord(char) not in range(0x0370, 0x03FF) for char in response):
+                print("⚠️ Detected non-Greek characters in response, using fallback")
+                return "", False
+            
+            return response, True
+            
+        except Exception as e:
+            print(f"❌ DOCX AI Error: {e}")
+            return "", False
 
     def calculate_similarity(self, question: str, qa_entry: Dict) -> float:
         """Calculate similarity between question and QA entry"""
@@ -224,56 +380,77 @@ class InternshipChatbot:
             print(f"❌ Groq API Error: {e}")
             return "", False
 
-    def get_fallback_response(self, question: str) -> str:
-        """Fallback response system"""
+    def get_fallback_response(self, question: str) -> Tuple[str, bool]:
+        """Fallback response system - returns (response, found_exact_match)"""
         if not self.qa_data:
-            return "Δεν υπάρχουν διαθέσιμα δεδομένα. Επικοινωνήστε με τον Γεώργιο Σοφιανίδη: gsofianidis@mitropolitiko.edu.gr"
+            return "Δεν υπάρχουν διαθέσιμα δεδομένα. Επικοινωνήστε με τον Γεώργιο Σοφιανίδη: gsofianidis@mitropolitiko.edu.gr", False
 
         # Find best match
         best_match = max(self.qa_data, key=lambda x: self.calculate_similarity(question, x))
         similarity = self.calculate_similarity(question, best_match)
 
         if similarity > 0.2:
-            return best_match['answer']
+            return best_match['answer'], True
         else:
             return f"""Δεν βρέθηκε συγκεκριμένη απάντηση για αυτή την ερώτηση.
 
-**Προτεινόμενες ενέργειες:**
+Προτεινόμενες ενέργειες:
 • Αναδιατυπώστε την ερώτηση
 • Επιλέξτε από τις συχνές ερωτήσεις στο αριστερό μενού
-• Επικοινωνήστε με τον Γεώργιο Σοφιανίδη: gsofianidis@mitropolitiko.edu.gr"""
+• Επικοινωνήστε με τον Γεώργιο Σοφιανίδη: gsofianidis@mitropolitiko.edu.gr""", False
 
     def get_response(self, question: str) -> str:
-        """Get chatbot response with AI + fallback logic"""
+        """Get chatbot response - JSON FIRST, then DOCX AI, then JSON fallback"""
         if not self.qa_data:
             return "Δεν υπάρχουν διαθέσιμα δεδομένα γνώσης."
         
-        # Find relevant context
-        matches = sorted(self.qa_data, 
-                        key=lambda x: self.calculate_similarity(question, x), 
-                        reverse=True)
+        # Step 1: Try JSON fallback FIRST
+        json_response, found_exact_match = self.get_fallback_response(question)
         
-        # Prepare context from top matches
-        context_parts = []
-        for match in matches[:3]:
-            if self.calculate_similarity(question, match) > 0.1:
-                context_parts.append(f"Q: {match['question']}\nA: {match['answer']}")
+        if found_exact_match:
+            print("✅ Found exact match in JSON data")
+            return json_response
         
-        context = "\n\n".join(context_parts) if context_parts else ""
+        # Step 2: Try DOCX AI search
+        print("📄 No good JSON match, trying DOCX AI search...")
         
-        # Try AI response first
-        if self.groq_client and context:
-            ai_response, success = self.get_ai_response(question, context)
-            if success and ai_response.strip():
-                return ai_response
+        if self.groq_client and DOCX_AVAILABLE:
+            docx_response, success = self.get_ai_response_with_docx(question)
+            if success and docx_response.strip():
+                print("✅ DOCX AI response successful")
+                return docx_response
         
-        # Fallback to rule-based response
-        return self.get_fallback_response(question)
+        # Step 3: Try regular AI with JSON context (fallback)
+        print("🤖 DOCX search failed, trying regular AI...")
+        
+        if self.groq_client:
+            # Find relevant context for AI
+            matches = sorted(self.qa_data, 
+                            key=lambda x: self.calculate_similarity(question, x), 
+                            reverse=True)
+            
+            # Prepare context from top matches
+            context_parts = []
+            for match in matches[:3]:
+                if self.calculate_similarity(question, match) > 0.1:
+                    context_parts.append(f"Q: {match['question']}\nA: {match['answer']}")
+            
+            context = "\n\n".join(context_parts) if context_parts else ""
+            
+            if context:
+                ai_response, success = self.get_ai_response(question, context)
+                if success and ai_response.strip():
+                    print("✅ Regular AI response successful")
+                    return ai_response
+        
+        # Step 4: Final fallback to JSON (even if low similarity)
+        print("📋 Using JSON fallback response")
+        return json_response
 
 def initialize_qa_file():
     """Create initial qa_data.json if it doesn't exist (fallback for development)"""
     if not os.path.exists("qa_data.json"):
-        print("📄 qa_data.json not found. Please create it with the full 41 entries.")
+        print("📄 qa_data.json not found. Please create it with the full 39 entries.")
         print("💡 Place the complete JSON file in the same directory as this script.")
         return False
     return True
@@ -292,6 +469,20 @@ def main():
         text-align: center;
         margin-bottom: 2rem;
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 2rem;
+    }
+    
+    .header-content {
+        flex: 1;
+    }
+    
+    .header-logo {
+        max-height: 80px;
+        max-width: 120px;
+        object-fit: contain;
     }
     
     .logo-container {
@@ -410,12 +601,17 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
-    # Header
-    st.markdown("""
+    # Header with Logo
+    logo_url = "https://raw.githubusercontent.com/GiorgosBouh/chatbot.placement/main/MK_LOGO_SEO_1200x630.png"
+    
+    st.markdown(f"""
     <div class="main-header">
-        <h1>🎓 Πρακτική Άσκηση</h1>
-        <h3>Μητροπολιτικό Κολλέγιο - Τμήμα Προπονητικής & Φυσικής Αγωγής</h3>
-        <p><em>Εξειδικευμένος AI Assistant για υποστήριξη φοιτητών</em></p>
+        <img src="{logo_url}" alt="Μητροπολιτικό Κολλέγιο" class="header-logo">
+        <div class="header-content">
+            <h1>Πρακτική Άσκηση</h1>
+            <h3>Μητροπολιτικό Κολλέγιο - Τμήμα Προπονητικής & Φυσικής Αγωγής</h3>
+            <p><em>Εξειδικευμένος AI Assistant για υποστήριξη φοιτητών</em></p>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -474,13 +670,16 @@ def main():
 
     # API Status
     if st.session_state.chatbot.groq_client:
-        st.markdown('<div class="api-status">🚀 AI Assistant Ενεργό</div>', unsafe_allow_html=True)
+        if DOCX_AVAILABLE:
+            st.markdown('<div class="api-status">📋 JSON + DOCX Mode</div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="api-status">📋 JSON First Mode</div>', unsafe_allow_html=True)
         
     # Επαγγελματική ενδειξη για sidebar
     st.markdown("""
     <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.6rem; margin-bottom: 1.5rem; text-align: center; font-size: 0.9rem;">
         <strong>Πληροφορίες:</strong> Χρησιμοποιήστε το αριστερό μενού για συχνές ερωτήσεις και επικοινωνία 👈<br>
-        <small>🔄 Τα δεδομένα φορτώνονται από το qa_data.json αρχείο</small>
+        <small>🔄 Προτεραιότητα: JSON → DOCX → AI</small>
     </div>
     """, unsafe_allow_html=True)
 
@@ -524,12 +723,16 @@ def main():
 
         # AI Status
         if st.session_state.chatbot.groq_client:
-            st.success("🤖 AI Assistant Ενεργό")
-            st.info("Χρησιμοποιεί Llama 3.1 8B")
+            if DOCX_AVAILABLE:
+                st.success("📋 JSON + DOCX Mode")
+                st.info("AI ψάχνει σε επίσημα έγγραφα")
+            else:
+                st.success("📋 JSON First Mode")
+                st.warning("DOCX search απενεργοποιημένο")
         else:
-            st.warning("📚 Knowledge Base Mode")
+            st.warning("📚 JSON Only Mode")
             if GROQ_AVAILABLE:
-                st.info("Για AI responses, χρειάζεται Groq API key")
+                st.info("Για AI+DOCX, χρειάζεται Groq API key")
             else:
                 st.error("Groq library δεν είναι διαθέσιμη")
 
@@ -546,9 +749,24 @@ def main():
             
             # Enhanced debugging info
             st.write("**System Status:**")
+            st.write("• Response Priority: JSON → DOCX → AI")
             st.write("• Groq Available:", GROQ_AVAILABLE)
             st.write("• Groq Client:", st.session_state.chatbot.groq_client is not None)
+            st.write("• DOCX Available:", DOCX_AVAILABLE)
             st.write("• QA Data Count:", len(st.session_state.chatbot.qa_data))
+            
+            # DOCX Status
+            if DOCX_AVAILABLE:
+                st.write("**DOCX Files:**")
+                for filename in st.session_state.chatbot.docx_files:
+                    cached = "📋" if filename in st.session_state.chatbot.docx_cache else "⏳"
+                    st.write(f"• {cached} {filename}")
+                
+                if st.session_state.chatbot.docx_cache:
+                    total_chars = sum(len(content) for content in st.session_state.chatbot.docx_cache.values())
+                    st.info(f"📊 Cached DOCX content: {total_chars:,} characters")
+            else:
+                st.error("📄 DOCX processing disabled - install python-docx")
             
             # File status
             qa_file_exists = os.path.exists("qa_data.json")
@@ -574,7 +792,7 @@ def main():
                     st.error(f"❌ JSON Error: {e}")
             else:
                 st.warning("📋 Using fallback data")
-                st.error("💡 Create qa_data.json with 41 entries!")
+                st.error("💡 Create qa_data.json with 39 entries!")
             
             # Directory info
             st.write("**File System:**")
@@ -636,7 +854,7 @@ def main():
         <small>
             🎓 <strong>Μητροπολιτικό Κολλέγιο Θεσσαλονίκης</strong> | 
             Τμήμα Προπονητικής & Φυσικής Αγωγής<br>
-            <em>AI-Powered Internship Assistant</em>
+            <em>JSON-First + DOCX AI Assistant</em>
         </small>
     </div>
     """, unsafe_allow_html=True)
