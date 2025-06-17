@@ -303,44 +303,7 @@ class InternshipChatbot:
             print("⚠️ No relevant PDF content found")
             return ""
 
-    def get_general_ai_response(self, user_message: str) -> Tuple[str, bool]:
-        """Get general AI response using LLM's own knowledge"""
-        if not self.groq_client:
-            return "", False
-        
-        try:
-            # General prompt that allows AI to use its knowledge
-            general_prompt = f"""Ερώτηση φοιτητή για πρακτική άσκηση: {user_message}
-
-Απάντησε με βάση τη γενική γνώση για την πρακτική άσκηση στην Ελλάδα. 
-Δώσε μια λογική και χρήσιμη απάντηση στα ελληνικά.
-Αν δεν ξέρεις κάτι συγκεκριμένο, πες ότι χρειάζεται επιβεβαίωση από τον υπεύθυνο πρακτικής."""
-
-            # Call Groq API
-            chat_completion = self.groq_client.chat.completions.create(
-                messages=[
-                    {"role": "system", "content": self.system_prompt},
-                    {"role": "user", "content": general_prompt}
-                ],
-                model="llama-3.1-8b-instant",
-                temperature=0.3,
-                max_tokens=600,
-                top_p=0.9,
-                stream=False
-            )
-
-            response = chat_completion.choices[0].message.content
-            
-            # Έλεγχος για μη-ελληνικούς χαρακτήρες
-            if response and any(ord(char) > 1500 and ord(char) not in range(0x0370, 0x03FF) for char in response):
-                print("⚠️ Detected non-Greek characters in general AI response")
-                return "", False
-            
-            return response, True
-            
-        except Exception as e:
-            print(f"❌ General AI Error: {e}")
-            return "", False
+    def get_ai_response_with_pdf(self, user_message: str) -> Tuple[str, bool]:
         """Get AI response using PDF files as context"""
         if not self.groq_client:
             return "", False
@@ -387,6 +350,45 @@ class InternshipChatbot:
             print(f"❌ PDF AI Error: {e}")
             return "", False
 
+    def get_general_ai_response(self, user_message: str) -> Tuple[str, bool]:
+        """Get general AI response using LLM's own knowledge"""
+        if not self.groq_client:
+            return "", False
+        
+        try:
+            # General prompt that allows AI to use its knowledge
+            general_prompt = f"""Ερώτηση φοιτητή για πρακτική άσκηση: {user_message}
+
+Απάντησε με βάση τη γενική γνώση για την πρακτική άσκηση στην Ελλάδα. 
+Δώσε μια λογική και χρήσιμη απάντηση στα ελληνικά.
+Αν δεν ξέρεις κάτι συγκεκριμένο, πες ότι χρειάζεται επιβεβαίωση από τον υπεύθυνο πρακτικής."""
+
+            # Call Groq API
+            chat_completion = self.groq_client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": self.system_prompt},
+                    {"role": "user", "content": general_prompt}
+                ],
+                model="llama-3.1-8b-instant",
+                temperature=0.3,
+                max_tokens=600,
+                top_p=0.9,
+                stream=False
+            )
+
+            response = chat_completion.choices[0].message.content
+            
+            # Έλεγχος για μη-ελληνικούς χαρακτήρες
+            if response and any(ord(char) > 1500 and ord(char) not in range(0x0370, 0x03FF) for char in response):
+                print("⚠️ Detected non-Greek characters in general AI response")
+                return "", False
+            
+            return response, True
+            
+        except Exception as e:
+            print(f"❌ General AI Error: {e}")
+            return "", False
+
     def calculate_similarity(self, question: str, qa_entry: Dict) -> float:
         """Calculate similarity between question and QA entry"""
         question_lower = question.lower()
@@ -421,7 +423,7 @@ class InternshipChatbot:
             chat_completion = self.groq_client.chat.completions.create(
                 messages=[
                     {"role": "system", "content": self.system_prompt},
-                    {"role": "user", "content": user_message}
+                    {"role": "user", "content": full_prompt}
                 ],
                 model="llama-3.1-8b-instant",
                 temperature=0.1,  # Χαμηλότερο για πιο συνεπείς απαντήσεις
