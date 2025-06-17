@@ -490,7 +490,9 @@ class InternshipChatbot:
             general_ai_response, success = self.get_general_ai_response(question)
             if success and general_ai_response.strip():
                 print("✅ General AI response successful")
-                return general_ai_response
+                # Add verification disclaimer for General AI responses
+                disclaimer = "\n\n⚠️ **Σημείωση:** Σε κάθε περίπτωση, αυτή η απάντηση χρειάζεται επαλήθευση από τον υπεύθυνο πρακτικής Γεώργιο Σοφιανίδη (gsofianidis@mitropolitiko.edu.gr)."
+                return general_ai_response + disclaimer
         
         # Step 4: Try regular AI with JSON context (fallback)
         print("🔄 General AI failed, trying AI with JSON context...")
