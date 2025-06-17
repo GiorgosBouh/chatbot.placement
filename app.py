@@ -179,6 +179,13 @@ class InternshipChatbot:
                 "keywords": ["έγγραφα", "εγγραφα", "χαρτιά", "χαρτια", "χρειάζομαι", "χρειαζομαι", "απαιτήσεις", "απαιτησεις", "απαιτούνται", "απαιτουνται", "δικαιολογητικά", "δικαιολογητικα", "φάκελος", "φακελος", "αίτηση", "αιτηση"]
             },
             {
+                "id": 5,
+                "category": "Δομές & Φορείς",
+                "question": "Σε ποιες δομές μπορώ να κάνω πρακτική άσκηση;",
+                "answer": "Μπορείτε να κάνετε πρακτική άσκηση σε:\n\n• Αθλητικούς συλλόγους (ποδόσφαιρο, μπάσκετ, βόλεϊ, ενόργανη γυμναστική, κλπ)\n• Γυμναστήρια και fitness centers\n• Κολυμβητήρια\n• Ακαδημίες αθλητισμού\n• Δημόσιους αθλητικούς οργανισμούς\n• Σχολεία (με τμήμα φυσικής αγωγής)\n• Κέντρα αποκατάστασης\n• Personal training studios\n\nΗ δομή πρέπει να έχει:\n• Εκπαιδευτή/υπεύθυνο με τα κατάλληλα προσόντα\n• Νόμιμη λειτουργία και ΑΦΜ\n• Δυνατότητα να σας καθοδηγήσει στην πρακτική",
+                "keywords": ["δομές", "δομη", "φορείς", "φορεις", "σύλλογος", "συλλογος", "γυμναστήριο", "γυμναστηριο", "ενόργανη", "ενοργανη", "ποδόσφαιρο", "ποδοσφαιρο", "μπάσκετ", "μπασκετ", "κολυμβητήριο", "κολυμβητηριο", "ακαδημία", "ακαδημια", "fitness", "personal", "training", "που", "ποιες", "ποιους", "ποια"]
+            },
+            {
                 "id": 30,
                 "category": "Οικονομικά & Αμοιβή",
                 "question": "Παίρνω αμοιβή για την πρακτική άσκηση; Τι κόστος έχει για τη δομή;",
@@ -356,12 +363,19 @@ class InternshipChatbot:
             return "", False
         
         try:
-            # General prompt that allows AI to use its knowledge
+            # Enhanced general prompt that includes specific context for common questions
             general_prompt = f"""Ερώτηση φοιτητή για πρακτική άσκηση: {user_message}
 
-Απάντησε με βάση τη γενική γνώση για την πρακτική άσκηση στην Ελλάδα. 
-Δώσε μια λογική και χρήσιμη απάντηση στα ελληνικά.
-Αν δεν ξέρεις κάτι συγκεκριμένο, πες ότι χρειάζεται επιβεβαίωση από τον υπεύθυνο πρακτικής."""
+Είσαι σύμβουλος για πρακτική άσκηση στο τμήμα Προπονητικής & Φυσικής Αγωγής.
+
+ΣΗΜΑΝΤΙΚΕΣ ΠΛΗΡΟΦΟΡΙΕΣ:
+- Απαιτούνται 240 ώρες πρακτικής άσκησης
+- Μπορεί να γίνει σε αθλητικούς συλλόγους, γυμναστήρια, ακαδημίες αθλητισμού
+- Υπεύθυνος: Γεώργιος Σοφιανίδης (gsofianidis@mitropolitiko.edu.gr)
+- Προθεσμία: 30 Μαΐου
+
+Δώσε μια χρήσιμη απάντηση στα ελληνικά με βάση αυτές τις πληροφορίες και τη γενική γνώση.
+Αν δεν είσαι σίγουρος, πες ότι χρειάζεται επιβεβαίωση από τον υπεύθυνο."""
 
             # Call Groq API
             chat_completion = self.groq_client.chat.completions.create(
@@ -389,23 +403,105 @@ class InternshipChatbot:
             print(f"❌ General AI Error: {e}")
             return "", False
 
+    def normalize_question(self, question: str) -> str:
+        """Normalize question for better matching"""
+        # Convert to lowercase
+        normalized = question.lower()
+        
+        # Common term replacements for better matching
+        replacements = {
+            "ενόργανη": "ενόργανη γυμναστική",
+            "γυμναστικη": "γυμναστική",
+            "πρακτικη": "πρακτική",
+            "ασκηση": "άσκηση",
+            "συλλογο": "σύλλογο",
+            "συλλογος": "σύλλογος",
+            "δομη": "δομή",
+            "φορεα": "φορέα",
+            "γυμναστηριο": "γυμναστήριο",
+            "μπορω": "μπορώ",
+            "θελω": "θέλω"
+        }
+        
+        for old_term, new_term in replacements.items():
+            normalized = normalized.replace(old_term, new_term)
+        
+        return normalized
     def calculate_similarity(self, question: str, qa_entry: Dict) -> float:
-        """Calculate similarity between question and QA entry"""
-        question_lower = question.lower()
+        """Calculate similarity between question and QA entry with improved matching"""
+        # Normalize the question first
+        question_normalized = self.normalize_question(question)
+        question_lower = question_normalized.lower()
         
         # Check if any keyword matches
         keyword_matches = sum(1 for keyword in qa_entry.get('keywords', []) 
                             if keyword.lower() in question_lower)
         
-        # Check title similarity
+        # Check title similarity (both directions)
         title_words = qa_entry['question'].lower().split()
-        title_matches = sum(1 for word in title_words if word in question_lower)
+        title_matches = sum(1 for word in title_words if word in question_lower and len(word) > 2)
         
-        # Combine scores
-        total_score = (keyword_matches * 2 + title_matches) / max(len(qa_entry.get('keywords', [])) + len(title_words), 1)
+        # Check question words in title
+        question_words = [w for w in question_lower.split() if len(w) > 2]
+        reverse_matches = sum(1 for word in question_words if word in qa_entry['question'].lower())
+        
+        # Check answer content for additional context
+        answer_words = qa_entry.get('answer', '').lower().split()
+        answer_matches = sum(1 for word in question_words if word in answer_words and len(word) > 3)
+        
+        # Enhanced scoring with better normalization
+        if keyword_matches > 0:
+            keyword_score = keyword_matches / max(len(qa_entry.get('keywords', [])), 1) * 3
+        else:
+            keyword_score = 0
+            
+        title_score = (title_matches + reverse_matches) / max(len(title_words) + len(question_words), 1) * 2
+        answer_score = answer_matches / max(len(question_words), 1) * 0.5
+        
+        total_score = keyword_score + title_score + answer_score
         return min(total_score, 1.0)
 
-    def get_ai_response(self, user_message: str, context: str) -> Tuple[str, bool]:
+    def get_smart_fallback_response(self, question: str) -> str:
+        """Smart fallback for specific types of questions"""
+        question_lower = self.normalize_question(question).lower()
+        
+        # Check for questions about specific types of facilities/clubs
+        facility_keywords = ["σύλλογο", "σύλλογος", "γυμναστήριο", "ενόργανη", "ποδόσφαιρο", 
+                           "μπάσκετ", "κολυμβητήριο", "ακαδημία", "fitness", "personal"]
+        
+        if any(keyword in question_lower for keyword in facility_keywords):
+            return """Ναι, μπορείτε να κάνετε πρακτική άσκηση σε:
+
+• Αθλητικούς συλλόγους όλων των αθλημάτων (ενόργανη γυμναστική, ποδόσφαιρο, μπάσκετ, βόλεϊ, κλπ)
+• Γυμναστήρια και fitness centers
+• Κολυμβητήρια
+• Ακαδημίες αθλητισμού
+• Personal training studios
+• Κέντρα αποκατάστασης
+
+ΠΡΟΫΠΟΘΕΣΕΙΣ:
+• Η δομή πρέπει να έχει νόμιμη λειτουργία και ΑΦΜ
+• Πρέπει να υπάρχει εκπαιδευτής/υπεύθυνος με τα κατάλληλα προσόντα
+• Η δομή πρέπει να μπορεί να σας καθοδηγήσει στην πρακτική
+
+Για περισσότερες λεπτομέρειες και έγκριση της συγκεκριμένης δομής:
+📧 gsofianidis@mitropolitiko.edu.gr"""
+
+        # Check for document/process questions
+        process_keywords = ["έγγραφα", "χαρτιά", "διαδικασία", "βήματα", "αίτηση"]
+        if any(keyword in question_lower for keyword in process_keywords):
+            # Return document-related response from existing data
+            for qa in self.qa_data:
+                if qa.get('category') == 'Έγγραφα & Διαδικασίες':
+                    return qa['answer']
+        
+        # Default response
+        return f"""Δεν βρέθηκε συγκεκριμένη απάντηση για αυτή την ερώτηση.
+
+Προτεινόμενες ενέργειες:
+• Αναδιατυπώστε την ερώτηση
+• Επιλέξτε από τις συχνές ερωτήσεις στο αριστερό μενού
+• Επικοινωνήστε με τον Γεώργιο Σοφιανίδη: gsofianidis@mitropolitiko.edu.gr"""
         """Get response from Groq AI with context"""
         if not self.groq_client:
             return "", False
@@ -453,23 +549,31 @@ class InternshipChatbot:
         # Find best match
         best_match = max(self.qa_data, key=lambda x: self.calculate_similarity(question, x))
         similarity = self.calculate_similarity(question, best_match)
+        
+        # Debug information
+        print(f"🔍 Question: '{question}'")
+        print(f"🎯 Best match: '{best_match['question']}'")
+        print(f"📊 Similarity score: {similarity:.3f}")
 
-        if similarity > 0.2:
+        # Lower threshold for better matching
+        if similarity > 0.15:  # Reduced from 0.2 to 0.15
+            print(f"✅ Match found with score {similarity:.3f}")
             return best_match['answer'], True
         else:
-            return f"""Δεν βρέθηκε συγκεκριμένη απάντηση για αυτή την ερώτηση.
-
-Προτεινόμενες ενέργειες:
-• Αναδιατυπώστε την ερώτηση
-• Επιλέξτε από τις συχνές ερωτήσεις στο αριστερό μενού
-• Επικοινωνήστε με τον Γεώργιο Σοφιανίδη: gsofianidis@mitropolitiko.edu.gr""", False
+            print(f"❌ No good match found (best score: {similarity:.3f})")
+            # Use smart fallback instead of generic response
+            smart_response = self.get_smart_fallback_response(question)
+            return smart_response, False
 
     def get_response(self, question: str) -> str:
         """Get chatbot response - JSON FIRST, then PDF AI, then General AI, then JSON fallback"""
         if not self.qa_data:
             return "Δεν υπάρχουν διαθέσιμα δεδομένα γνώσης."
         
+        print(f"\n🤖 Processing question: '{question}'")
+        
         # Step 1: Try JSON fallback FIRST
+        print("📋 Step 1: Trying JSON data matching...")
         json_response, found_exact_match = self.get_fallback_response(question)
         
         if found_exact_match:
@@ -477,7 +581,7 @@ class InternshipChatbot:
             return json_response
         
         # Step 2: Try PDF AI search
-        print("📄 No good JSON match, trying PDF AI search...")
+        print("📄 Step 2: No good JSON match, trying PDF AI search...")
         
         if self.groq_client and PDF_AVAILABLE:
             pdf_response, success = self.get_ai_response_with_pdf(question)
@@ -485,8 +589,8 @@ class InternshipChatbot:
                 print("✅ PDF AI response successful")
                 return pdf_response
         
-        # Step 3: Try General AI with context (NEW!)
-        print("🤖 PDF search failed, trying General AI...")
+        # Step 3: Try General AI with context
+        print("🤖 Step 3: PDF search failed, trying General AI...")
         
         if self.groq_client:
             general_ai_response, success = self.get_general_ai_response(question)
@@ -497,7 +601,7 @@ class InternshipChatbot:
                 return general_ai_response + disclaimer
         
         # Step 4: Try regular AI with JSON context (fallback)
-        print("🔄 General AI failed, trying AI with JSON context...")
+        print("🔄 Step 4: General AI failed, trying AI with JSON context...")
         
         if self.groq_client:
             # Find relevant context for AI
@@ -508,7 +612,9 @@ class InternshipChatbot:
             # Prepare context from top matches
             context_parts = []
             for match in matches[:3]:
-                if self.calculate_similarity(question, match) > 0.1:
+                similarity = self.calculate_similarity(question, match)
+                print(f"   • Context candidate: '{match['question']}' (score: {similarity:.3f})")
+                if similarity > 0.1:
                     context_parts.append(f"Q: {match['question']}\nA: {match['answer']}")
             
             context = "\n\n".join(context_parts) if context_parts else ""
@@ -520,7 +626,7 @@ class InternshipChatbot:
                     return ai_response
         
         # Step 5: Final fallback to JSON (even if low similarity)
-        print("📋 Using JSON fallback response")
+        print("📋 Step 5: Using JSON fallback response")
         return json_response
 
 def initialize_qa_file():
@@ -833,6 +939,27 @@ def main():
             if PDF_AVAILABLE:
                 st.write("• PDF Method:", PDF_METHOD)
             st.write("• QA Data Count:", len(st.session_state.chatbot.qa_data))
+            
+            # Debug similarity testing
+            st.subheader("🔍 Debug Similarity Testing")
+            test_question = st.text_input("Test question similarity:", placeholder="Σε σύλλογο ενόργανης μπορώ να κάνω πρακτική?")
+            if test_question:
+                st.write("**Similarity Scores:**")
+                similarities = []
+                for qa in st.session_state.chatbot.qa_data:
+                    similarity = st.session_state.chatbot.calculate_similarity(test_question, qa)
+                    similarities.append((similarity, qa['question'], qa['id']))
+                
+                # Sort by similarity
+                similarities.sort(key=lambda x: x[0], reverse=True)
+                
+                for similarity, question, qa_id in similarities[:5]:
+                    color = "🟢" if similarity > 0.15 else "🟡" if similarity > 0.05 else "🔴"
+                    st.write(f"{color} {similarity:.3f} - Q{qa_id}: {question}")
+                
+                # Show what would be returned
+                response, found_match = st.session_state.chatbot.get_fallback_response(test_question)
+                st.write(f"**Would return:** {'✅ Exact match' if found_match else '❌ Fallback response'}")
             
             # PDF Status
             if PDF_AVAILABLE:
