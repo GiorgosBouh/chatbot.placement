@@ -37,13 +37,44 @@ except ImportError:
         fitz = None
         print("⚠️ No PDF library available. PDF search disabled.")
 
-# Ρύθμιση σελίδας
+# Ρύθμιση σελίδας - Mobile Optimized
 st.set_page_config(
     page_title="Πρακτική Άσκηση - Μητροπολιτικό Κολλέγιο",
     page_icon="🎓",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
+# Add mobile viewport meta tag
+st.markdown("""
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<style>
+/* Ensure mobile-friendly viewport */
+html, body {
+    overflow-x: hidden;
+    max-width: 100vw;
+}
+
+/* Prevent horizontal scroll on mobile */
+.stApp {
+    max-width: 100vw;
+    overflow-x: hidden;
+}
+
+/* Mobile container improvements */
+@media (max-width: 768px) {
+    .block-container {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        max-width: 100% !important;
+    }
+    
+    .main .block-container {
+        padding-top: 1rem !important;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
 
 @dataclass
 class QAEntry:
@@ -699,6 +730,49 @@ def main():
         object-fit: contain;
     }
     
+    /* Mobile Responsiveness */
+    @media (max-width: 768px) {
+        .main-header {
+            flex-direction: column;
+            gap: 1rem;
+            padding: 1rem;
+        }
+        
+        .header-logo {
+            max-height: 60px;
+            max-width: 100px;
+        }
+        
+        .header-content h1 {
+            font-size: 1.5rem !important;
+            margin-bottom: 0.5rem !important;
+        }
+        
+        .header-content h3 {
+            font-size: 1.1rem !important;
+            margin-bottom: 0.5rem !important;
+        }
+        
+        .header-content p {
+            font-size: 0.9rem !important;
+        }
+    }
+    
+    @media (max-width: 480px) {
+        .main-header {
+            padding: 0.8rem;
+        }
+        
+        .header-content h1 {
+            font-size: 1.3rem !important;
+        }
+        
+        .header-content h3 {
+            font-size: 1rem !important;
+            line-height: 1.3 !important;
+        }
+    }
+    
     .logo-container {
         display: flex;
         align-items: center;
@@ -728,6 +802,28 @@ def main():
         box-shadow: 0 4px 8px rgba(0,0,0,0.15);
     }
     
+    /* Mobile Message Styles */
+    @media (max-width: 768px) {
+        .user-message, .ai-message {
+            padding: 0.8rem;
+            margin: 0.8rem 0;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+        
+        .user-message strong, .ai-message strong {
+            font-size: 0.9rem;
+        }
+    }
+    
+    @media (max-width: 480px) {
+        .user-message, .ai-message {
+            padding: 0.6rem;
+            margin: 0.6rem 0;
+            font-size: 0.85rem;
+        }
+    }
+    
     .ai-message a {
         color: #ffeb3b !important;
         text-decoration: underline !important;
@@ -754,6 +850,27 @@ def main():
         box-shadow: 0 4px 16px rgba(0,0,0,0.12);
     }
     
+    /* Mobile Info Cards */
+    @media (max-width: 768px) {
+        .info-card {
+            padding: 1rem;
+            margin: 0.3rem 0;
+        }
+        
+        .info-card h4 {
+            font-size: 1rem !important;
+            margin-bottom: 0.3rem !important;
+        }
+        
+        .info-card p {
+            font-size: 1rem !important;
+        }
+        
+        .info-card small {
+            font-size: 0.8rem !important;
+        }
+    }
+    
     .api-status {
         position: fixed;
         top: 20px;
@@ -765,6 +882,17 @@ def main():
         font-size: 0.9rem;
         z-index: 1000;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    /* Mobile API Status */
+    @media (max-width: 768px) {
+        .api-status {
+            position: static;
+            display: inline-block;
+            margin: 1rem 0;
+            font-size: 0.8rem;
+            padding: 0.4rem 0.8rem;
+        }
     }
     
     .quick-stats {
@@ -792,6 +920,14 @@ def main():
         border: 1px solid #e8f4f8;
     }
     
+    /* Mobile Chat Container */
+    @media (max-width: 768px) {
+        .chat-container {
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+    }
+    
     .stTextInput > div > div > input {
         border-radius: 20px;
         border: 2px solid #e8f4f8;
@@ -812,7 +948,53 @@ def main():
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(31, 78, 121, 0.3);
     }
+    
+    /* Streamlit column responsiveness fix */
+    @media (max-width: 768px) {
+        .stColumns {
+            flex-direction: column !important;
+        }
+        
+        .stColumns > div {
+            width: 100% !important;
+            margin-bottom: 1rem !important;
+        }
+    }
+    
+    /* Auto-scroll target */
+    .latest-message {
+        scroll-margin-top: 100px;
+    }
     </style>
+    
+    <script>
+    // Auto-scroll to latest message
+    function scrollToLatest() {
+        setTimeout(function() {
+            const latestMessage = document.querySelector('.latest-message');
+            if (latestMessage) {
+                latestMessage.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } else {
+                // Fallback: scroll to bottom
+                window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+            }
+        }, 100);
+    }
+    
+    // Check if new message was added
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.addedNodes.length) {
+                scrollToLatest();
+            }
+        });
+    });
+    
+    // Start observing
+    if (document.body) {
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+    </script>
     """, unsafe_allow_html=True)
 
     # Header with Logo
@@ -850,69 +1032,87 @@ def main():
         if new_data_count != current_data_count:
             st.toast(f"📊 Δεδομένα ενημερώθηκαν: {new_data_count} ερωτήσεις")
 
-    # Quick info cards
+    # Quick info cards - Mobile Responsive
     st.markdown("### 📊 Σημαντικές Πληροφορίες")
     
-    quick_col1, quick_col2, quick_col3 = st.columns(3)
-    
-    with quick_col1:
-        st.markdown("""
-        <div class="info-card" style="text-align: center;">
-            <h4 style="color: #1f4e79; margin-bottom: 0.5rem;">📅 Απαιτούμενες Ώρες</h4>
-            <p style="font-size: 1.2rem; font-weight: 600; color: #28a745; margin: 0;">240 ώρες</p>
-            <small style="color: #6c757d;">Προθεσμία: 30 Μαϊου</small>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with quick_col2:
-        st.markdown("""
-        <div class="info-card" style="text-align: center;">
-            <h4 style="color: #1f4e79; margin-bottom: 0.5rem;">📋 Παράδοση Συμβάσεων</h4>
-            <p style="font-size: 1.2rem; font-weight: 600; color: #ffc107; margin: 0;">Moodle Platform</p>
-            <small style="color: #6c757d;">Προθεσμία: 15 Οκτωβρίου</small>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with quick_col3:
-        st.markdown("""
-        <div class="info-card" style="text-align: center;">
-            <h4 style="color: #1f4e79; margin-bottom: 0.5rem;">⏰ Επιτρεπόμενο Ωράριο</h4>
-            <p style="font-size: 1.2rem; font-weight: 600; color: #17a2b8; margin: 0;">Δευτέρα-Σάββατο</p>
-            <small style="color: #6c757d;">Μέχρι 8 ώρες ανά ημέρα</small>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # API Status
-    if st.session_state.chatbot.groq_client:
-        if PDF_AVAILABLE:
-            st.markdown(f'<div class="api-status">📄 PDF+JSON ({PDF_METHOD})</div>', unsafe_allow_html=True)
-        else:
-            st.markdown('<div class="api-status">📋 JSON First Mode</div>', unsafe_allow_html=True)
+    # Use responsive approach for mobile
+    if st.session_state.get('mobile_view', False) or True:  # Always use responsive
+        # Single column layout for better mobile experience
+        info_cols = st.columns([1, 1, 1])
         
-    # Επαγγελματική ενδειξη για sidebar
+        with info_cols[0]:
+            st.markdown("""
+            <div class="info-card" style="text-align: center;">
+                <h4 style="color: #1f4e79; margin-bottom: 0.5rem;">📅 Απαιτούμενες Ώρες</h4>
+                <p style="font-size: 1.2rem; font-weight: 600; color: #28a745; margin: 0;">240 ώρες</p>
+                <small style="color: #6c757d;">Προθεσμία: 30 Μαϊου</small>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with info_cols[1]:
+            st.markdown("""
+            <div class="info-card" style="text-align: center;">
+                <h4 style="color: #1f4e79; margin-bottom: 0.5rem;">📋 Παράδοση Συμβάσεων</h4>
+                <p style="font-size: 1.2rem; font-weight: 600; color: #ffc107; margin: 0;">Moodle Platform</p>
+                <small style="color: #6c757d;">Προθεσμία: 15 Οκτωβρίου</small>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with info_cols[2]:
+            st.markdown("""
+            <div class="info-card" style="text-align: center;">
+                <h4 style="color: #1f4e79; margin-bottom: 0.5rem;">⏰ Επιτρεπόμενο Ωράριο</h4>
+                <p style="font-size: 1.2rem; font-weight: 600; color: #17a2b8; margin: 0;">Δευτέρα-Σάββατο</p>
+                <small style="color: #6c757d;">Μέχρι 8 ώρες ανά ημέρα</small>
+            </div>
+            """, unsafe_allow_html=True)
+
+    # API Status - Mobile Responsive
+    api_status_container = st.container()
+    with api_status_container:
+        if st.session_state.chatbot.groq_client:
+            if PDF_AVAILABLE:
+                st.markdown(f'<div class="api-status">📄 PDF+JSON ({PDF_METHOD})</div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="api-status">📋 JSON First Mode</div>', unsafe_allow_html=True)
+        
+    # Επαγγελματική ενδειξη για sidebar - Mobile Responsive
     status_text = "JSON → PDF+JSON AI → JSON Fallback" if PDF_AVAILABLE else "JSON → AI → Fallback"
     st.markdown(f"""
     <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.6rem; margin-bottom: 1.5rem; text-align: center; font-size: 0.9rem;">
         <strong>Πληροφορίες:</strong> Χρησιμοποιήστε το αριστερό μενού για συχνές ερωτήσεις και επικοινωνία 👈<br>
-        <small>🔄 Προτεραιότητα: {status_text}</small>
+        <small style="font-size: 0.8rem; display: block; margin-top: 0.3rem;">🔄 Προτεραιότητα: {status_text}</small>
     </div>
+    
+    <style>
+    @media (max-width: 768px) {{
+        div[data-testid="stMarkdownContainer"] div {{
+            font-size: 0.8rem !important;
+        }}
+        
+        div[data-testid="stMarkdownContainer"] strong {{
+            font-size: 0.85rem !important;
+        }}
+        
+        div[data-testid="stMarkdownContainer"] small {{
+            font-size: 0.7rem !important;
+        }}
+    }}
+    </style>
     """, unsafe_allow_html=True)
 
     # Sidebar
     with st.sidebar:
-        st.markdown("## 🗣️ Επικοινωνία")
+        st.markdown("## 📞 Επικοινωνία")
         
         st.markdown("""
         **Υπεύθυνος Πρακτικής Άσκησης**  
         **Γεώργιος Σοφιανίδης**  
-        **📞 2314409000**
-       ** 📧 gsofianidis@mitropolitiko.edu.gr**
+        📧 gsofianidis@mitropolitiko.edu.gr
         
-        **Σχεδιασμός/Ανάπτυξη/Τεχνική Υποστήριξη**  
+        **Τεχνική Υποστήριξη**  
         **Γεώργιος Μπουχουράς**  
         📧 gbouchouras@mitropolitiko.edu.gr
-
-        ⚠️ Κανένα επίσημο έγγραφο δεν υπάρχει ή κατατίθεται στην παρούσα εφαρμογή
         """)
 
         st.markdown("---")
@@ -931,6 +1131,23 @@ def main():
         for category, questions in categories.items():
             if st.expander(f"📂 {category}"):
                 for qa in questions:
+                    # Mobile-friendly button styling
+                    button_style = """
+                    <style>
+                    @media (max-width: 768px) {
+                        .stButton > button {
+                            font-size: 0.8rem !important;
+                            padding: 0.4rem 0.8rem !important;
+                            line-height: 1.2 !important;
+                            white-space: normal !important;
+                            height: auto !important;
+                            min-height: 2.5rem !important;
+                        }
+                    }
+                    </style>
+                    """
+                    st.markdown(button_style, unsafe_allow_html=True)
+                    
                     if st.button(qa['question'], key=f"faq_{qa['id']}", use_container_width=True):
                         # Add to chat
                         st.session_state.messages.append({"role": "user", "content": qa['question']})
@@ -1057,18 +1274,42 @@ def main():
     st.markdown('<div class="chat-container">', unsafe_allow_html=True)
     st.markdown("### 💬 Κάντε την ερώτησή σας")
 
-    # Display chat messages
-    for message in st.session_state.messages:
+    # Display chat messages with auto-scroll
+    message_count = len(st.session_state.messages)
+    for i, message in enumerate(st.session_state.messages):
+        # Add latest-message class to the most recent message for auto-scroll
+        latest_class = "latest-message" if i == message_count - 1 else ""
+        
         if message["role"] == "user":
-            st.markdown(f'<div class="user-message"><strong>Εσείς:</strong> {message["content"]}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="user-message {latest_class}"><strong>Εσείς:</strong> {message["content"]}</div>', unsafe_allow_html=True)
         else:
             # Convert markdown to HTML for better display
             content = message["content"].replace('\n', '<br>')
-            st.markdown(f'<div class="ai-message"><strong>🤖 Assistant:</strong><br><br>{content}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="ai-message {latest_class}"><strong>🤖 Assistant:</strong><br><br>{content}</div>', unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
 
     # Chat input - moved outside container for better functionality
+    # Add mobile-responsive container for input
+    st.markdown("""
+    <style>
+    /* Mobile chat input improvements */
+    @media (max-width: 768px) {
+        .stChatInput {
+            padding: 0 0.5rem !important;
+        }
+        
+        .stChatInput > div {
+            max-width: 100% !important;
+        }
+        
+        .stSpinner {
+            text-align: center !important;
+        }
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
     user_input = st.chat_input("Γράψτε την ερώτησή σας εδώ...")
     
     if user_input:
@@ -1089,16 +1330,74 @@ def main():
         # Rerun to display new messages
         st.rerun()
 
-    # Footer
+    # Auto-scroll JavaScript (triggered after new messages)
+    if len(st.session_state.messages) > 0:
+        st.markdown("""
+        <script>
+        // Enhanced auto-scroll for mobile compatibility
+        function smoothScrollToLatest() {
+            setTimeout(function() {
+                const latestMessage = document.querySelector('.latest-message');
+                if (latestMessage) {
+                    // For mobile, scroll to message with some offset
+                    const rect = latestMessage.getBoundingClientRect();
+                    const offset = window.innerWidth <= 768 ? 100 : 50;
+                    
+                    window.scrollTo({ 
+                        top: window.pageYOffset + rect.top - offset,
+                        behavior: 'smooth' 
+                    });
+                } else {
+                    // Fallback: scroll to bottom with mobile consideration
+                    const scrollHeight = document.body.scrollHeight;
+                    const viewportHeight = window.innerHeight;
+                    const targetScroll = Math.max(0, scrollHeight - viewportHeight + 50);
+                    
+                    window.scrollTo({ 
+                        top: targetScroll,
+                        behavior: 'smooth' 
+                    });
+                }
+            }, 300); // Increased delay for mobile rendering
+        }
+        
+        // Execute scroll
+        smoothScrollToLatest();
+        
+        // Additional check for mobile devices
+        if (window.innerWidth <= 768) {
+            setTimeout(smoothScrollToLatest, 600);
+        }
+        </script>
+        """, unsafe_allow_html=True)
+
+    # Footer - Mobile Responsive
     footer_text = "JSON-First + PDF+JSON AI Assistant" if PDF_AVAILABLE else "JSON-First AI Assistant"
     st.markdown(f"""
     <div style="text-align: center; color: #6c757d; padding: 1rem;">
-        <small>
-            🎓 <strong>Μητροπολιτικό Κολλέγιο Θεσσαλονίκης</strong> | 
-            Τμήμα Προπονητικής & Φυσικής Αγωγής<br>
-            <em>{footer_text}</em>
+        <small style="line-height: 1.4;">
+            🎓 <strong>Μητροπολιτικό Κολλέγιο Θεσσαλονίκης</strong><br>
+            <span style="display: inline-block; margin: 0.2rem 0;">Τμήμα Προπονητικής & Φυσικής Αγωγής</span><br>
+            <em style="font-size: 0.85em;">{footer_text}</em>
         </small>
     </div>
+    
+    <style>
+    @media (max-width: 768px) {{
+        .footer-responsive {{
+            font-size: 0.8rem !important;
+            padding: 0.8rem !important;
+        }}
+        
+        .footer-responsive strong {{
+            font-size: 0.85rem !important;
+        }}
+        
+        .footer-responsive em {{
+            font-size: 0.75rem !important;
+        }}
+    }}
+    </style>
     """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
