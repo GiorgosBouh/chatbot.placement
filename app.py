@@ -45,20 +45,20 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Add mobile viewport meta tag
+# Add mobile viewport meta tag and ensure proper CSS containment
 st.markdown("""
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <style>
 /* Ensure mobile-friendly viewport */
 html, body {
-    overflow-x: hidden;
-    max-width: 100vw;
+    overflow-x: hidden !important;
+    max-width: 100vw !important;
 }
 
 /* Prevent horizontal scroll on mobile */
 .stApp {
-    max-width: 100vw;
-    overflow-x: hidden;
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
 }
 
 /* Mobile container improvements */
@@ -71,6 +71,42 @@ html, body {
     
     .main .block-container {
         padding-top: 1rem !important;
+    }
+    
+    /* Fix for Streamlit's responsive issues */
+    .stMarkdown, .stButton, .stSelectbox, .stTextInput {
+        width: 100% !important;
+    }
+    
+    /* Sidebar improvements on mobile */
+    .css-1d391kg {
+        padding: 1rem !important;
+    }
+    
+    /* Chat input mobile optimization */
+    .stChatInputContainer {
+        padding: 0.5rem !important;
+    }
+}
+
+/* Very small mobile devices */
+@media (max-width: 480px) {
+    .block-container {
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+    }
+    
+    h1, h2, h3 {
+        font-size: 1.2rem !important;
+        line-height: 1.3 !important;
+    }
+    
+    .stMarkdown h1 {
+        font-size: 1.4rem !important;
+    }
+    
+    .stMarkdown h3 {
+        font-size: 1.1rem !important;
     }
 }
 </style>
@@ -703,9 +739,10 @@ def initialize_qa_file():
 def main():
     """Main Streamlit application - Git-first content management"""
     
-    # CSS Styling
+    # Single, comprehensive CSS styling block
     st.markdown("""
     <style>
+    /* Main header styling */
     .main-header {
         background: linear-gradient(90deg, #1f4e79 0%, #2980b9 100%);
         color: white;
@@ -730,8 +767,109 @@ def main():
         object-fit: contain;
     }
     
-    /* Mobile Responsiveness */
+    /* Message styling */
+    .user-message {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border: 1px solid #dee2e6;
+        border-left: 4px solid #007bff;
+        padding: 1rem;
+        border-radius: 8px;
+        margin: 1rem 0;
+        color: #333;
+    }
+    
+    .ai-message {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-left: 4px solid #4caf50;
+        padding: 1rem;
+        border-radius: 8px;
+        margin: 1rem 0;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    
+    .ai-message a {
+        color: #ffeb3b !important;
+        text-decoration: underline !important;
+        font-weight: bold !important;
+    }
+    
+    .ai-message a:hover {
+        color: #fff9c4 !important;
+        text-decoration: underline !important;
+    }
+    
+    /* Info cards */
+    .info-card {
+        background: white;
+        border: 1px solid #e8f4f8;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin: 0.5rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .info-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    }
+    
+    /* API Status */
+    .api-status {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #28a745;
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        z-index: 1000;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    /* Chat container */
+    .chat-container {
+        background: white;
+        border-radius: 10px;
+        padding: 2rem;
+        margin-top: 2rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        border: 1px solid #e8f4f8;
+    }
+    
+    /* Streamlit component styling */
+    .stTextInput > div > div > input {
+        border-radius: 20px;
+        border: 2px solid #e8f4f8;
+        padding: 0.8rem 1.2rem;
+    }
+    
+    .stButton > button {
+        background: linear-gradient(90deg, #1f4e79 0%, #2980b9 100%);
+        color: white;
+        border: none;
+        border-radius: 20px;
+        padding: 0.6rem 2rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(31, 78, 121, 0.3);
+    }
+    
+    /* Auto-scroll target */
+    .latest-message {
+        scroll-margin-top: 100px;
+    }
+    
+    /* MOBILE RESPONSIVENESS */
     @media (max-width: 768px) {
+        /* Header responsive */
         .main-header {
             flex-direction: column;
             gap: 1rem;
@@ -756,54 +894,8 @@ def main():
         .header-content p {
             font-size: 0.9rem !important;
         }
-    }
-    
-    @media (max-width: 480px) {
-        .main-header {
-            padding: 0.8rem;
-        }
         
-        .header-content h1 {
-            font-size: 1.3rem !important;
-        }
-        
-        .header-content h3 {
-            font-size: 1rem !important;
-            line-height: 1.3 !important;
-        }
-    }
-    
-    .logo-container {
-        display: flex;
-        align-items: center;
-        margin-bottom: 2rem;
-        padding: 1rem 0;
-        border-bottom: 1px solid #e8f4f8;
-    }
-    
-    .user-message {
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        border: 1px solid #dee2e6;
-        border-left: 4px solid #007bff;
-        padding: 1rem;
-        border-radius: 8px;
-        margin: 1rem 0;
-        color: #333;
-    }
-    
-    .ai-message {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        border-left: 4px solid #4caf50;
-        padding: 1rem;
-        border-radius: 8px;
-        margin: 1rem 0;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-    }
-    
-    /* Mobile Message Styles */
-    @media (max-width: 768px) {
+        /* Messages responsive */
         .user-message, .ai-message {
             padding: 0.8rem;
             margin: 0.8rem 0;
@@ -814,44 +906,8 @@ def main():
         .user-message strong, .ai-message strong {
             font-size: 0.9rem;
         }
-    }
-    
-    @media (max-width: 480px) {
-        .user-message, .ai-message {
-            padding: 0.6rem;
-            margin: 0.6rem 0;
-            font-size: 0.85rem;
-        }
-    }
-    
-    .ai-message a {
-        color: #ffeb3b !important;
-        text-decoration: underline !important;
-        font-weight: bold !important;
-    }
-    
-    .ai-message a:hover {
-        color: #fff9c4 !important;
-        text-decoration: underline !important;
-    }
-    
-    .info-card {
-        background: white;
-        border: 1px solid #e8f4f8;
-        border-radius: 10px;
-        padding: 1.5rem;
-        margin: 0.5rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-    
-    .info-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-    }
-    
-    /* Mobile Info Cards */
-    @media (max-width: 768px) {
+        
+        /* Info cards responsive */
         .info-card {
             padding: 1rem;
             margin: 0.3rem 0;
@@ -869,23 +925,8 @@ def main():
         .info-card small {
             font-size: 0.8rem !important;
         }
-    }
-    
-    .api-status {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: #28a745;
-        color: white;
-        padding: 0.5rem 1rem;
-        border-radius: 20px;
-        font-size: 0.9rem;
-        z-index: 1000;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    
-    /* Mobile API Status */
-    @media (max-width: 768px) {
+        
+        /* API Status responsive */
         .api-status {
             position: static;
             display: inline-block;
@@ -893,64 +934,14 @@ def main():
             font-size: 0.8rem;
             padding: 0.4rem 0.8rem;
         }
-    }
-    
-    .quick-stats {
-        display: flex;
-        justify-content: space-around;
-        margin: 2rem 0;
-        gap: 1rem;
-    }
-    
-    .stat-item {
-        text-align: center;
-        background: white;
-        padding: 1rem;
-        border-radius: 8px;
-        border: 1px solid #e8f4f8;
-        flex: 1;
-    }
-    
-    .chat-container {
-        background: white;
-        border-radius: 10px;
-        padding: 2rem;
-        margin-top: 2rem;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-        border: 1px solid #e8f4f8;
-    }
-    
-    /* Mobile Chat Container */
-    @media (max-width: 768px) {
+        
+        /* Chat container responsive */
         .chat-container {
             padding: 1rem;
             margin-top: 1rem;
         }
-    }
-    
-    .stTextInput > div > div > input {
-        border-radius: 20px;
-        border: 2px solid #e8f4f8;
-        padding: 0.8rem 1.2rem;
-    }
-    
-    .stButton > button {
-        background: linear-gradient(90deg, #1f4e79 0%, #2980b9 100%);
-        color: white;
-        border: none;
-        border-radius: 20px;
-        padding: 0.6rem 2rem;
-        font-weight: 600;
-        transition: all 0.3s ease;
-    }
-    
-    .stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(31, 78, 121, 0.3);
-    }
-    
-    /* Streamlit column responsiveness fix */
-    @media (max-width: 768px) {
+        
+        /* Streamlit column responsiveness fix */
         .stColumns {
             flex-direction: column !important;
         }
@@ -959,42 +950,53 @@ def main():
             width: 100% !important;
             margin-bottom: 1rem !important;
         }
+        
+        /* FAQ Buttons responsive */
+        .stButton > button {
+            font-size: 0.8rem !important;
+            padding: 0.4rem 0.8rem !important;
+            line-height: 1.2 !important;
+            white-space: normal !important;
+            height: auto !important;
+            min-height: 2.5rem !important;
+        }
+        
+        /* Chat input responsive */
+        .stChatInput {
+            padding: 0 0.5rem !important;
+        }
+        
+        .stChatInput > div {
+            max-width: 100% !important;
+        }
+        
+        .stSpinner {
+            text-align: center !important;
+        }
     }
     
-    /* Auto-scroll target */
-    .latest-message {
-        scroll-margin-top: 100px;
+    /* Very small mobile devices */
+    @media (max-width: 480px) {
+        .main-header {
+            padding: 0.8rem;
+        }
+        
+        .header-content h1 {
+            font-size: 1.3rem !important;
+        }
+        
+        .header-content h3 {
+            font-size: 1rem !important;
+            line-height: 1.3 !important;
+        }
+        
+        .user-message, .ai-message {
+            padding: 0.6rem;
+            margin: 0.6rem 0;
+            font-size: 0.85rem;
+        }
     }
     </style>
-    
-    <script>
-    // Auto-scroll to latest message
-    function scrollToLatest() {
-        setTimeout(function() {
-            const latestMessage = document.querySelector('.latest-message');
-            if (latestMessage) {
-                latestMessage.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            } else {
-                // Fallback: scroll to bottom
-                window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-            }
-        }, 100);
-    }
-    
-    // Check if new message was added
-    const observer = new MutationObserver(function(mutations) {
-        mutations.forEach(function(mutation) {
-            if (mutation.addedNodes.length) {
-                scrollToLatest();
-            }
-        });
-    });
-    
-    // Start observing
-    if (document.body) {
-        observer.observe(document.body, { childList: true, subtree: true });
-    }
-    </script>
     """, unsafe_allow_html=True)
 
     # Header with Logo
@@ -1083,22 +1085,6 @@ def main():
         <strong>Πληροφορίες:</strong> Χρησιμοποιήστε το αριστερό μενού για συχνές ερωτήσεις και επικοινωνία 👈<br>
         <small style="font-size: 0.8rem; display: block; margin-top: 0.3rem;">🔄 Προτεραιότητα: {status_text}</small>
     </div>
-    
-    <style>
-    @media (max-width: 768px) {{
-        div[data-testid="stMarkdownContainer"] div {{
-            font-size: 0.8rem !important;
-        }}
-        
-        div[data-testid="stMarkdownContainer"] strong {{
-            font-size: 0.85rem !important;
-        }}
-        
-        div[data-testid="stMarkdownContainer"] small {{
-            font-size: 0.7rem !important;
-        }}
-    }}
-    </style>
     """, unsafe_allow_html=True)
 
     # Sidebar
@@ -1131,23 +1117,6 @@ def main():
         for category, questions in categories.items():
             if st.expander(f"📂 {category}"):
                 for qa in questions:
-                    # Mobile-friendly button styling
-                    button_style = """
-                    <style>
-                    @media (max-width: 768px) {
-                        .stButton > button {
-                            font-size: 0.8rem !important;
-                            padding: 0.4rem 0.8rem !important;
-                            line-height: 1.2 !important;
-                            white-space: normal !important;
-                            height: auto !important;
-                            min-height: 2.5rem !important;
-                        }
-                    }
-                    </style>
-                    """
-                    st.markdown(button_style, unsafe_allow_html=True)
-                    
                     if st.button(qa['question'], key=f"faq_{qa['id']}", use_container_width=True):
                         # Add to chat
                         st.session_state.messages.append({"role": "user", "content": qa['question']})
@@ -1290,26 +1259,6 @@ def main():
     st.markdown('</div>', unsafe_allow_html=True)
 
     # Chat input - moved outside container for better functionality
-    # Add mobile-responsive container for input
-    st.markdown("""
-    <style>
-    /* Mobile chat input improvements */
-    @media (max-width: 768px) {
-        .stChatInput {
-            padding: 0 0.5rem !important;
-        }
-        
-        .stChatInput > div {
-            max-width: 100% !important;
-        }
-        
-        .stSpinner {
-            text-align: center !important;
-        }
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
     user_input = st.chat_input("Γράψτε την ερώτησή σας εδώ...")
     
     if user_input:
@@ -1381,23 +1330,6 @@ def main():
             <em style="font-size: 0.85em;">{footer_text}</em>
         </small>
     </div>
-    
-    <style>
-    @media (max-width: 768px) {{
-        .footer-responsive {{
-            font-size: 0.8rem !important;
-            padding: 0.8rem !important;
-        }}
-        
-        .footer-responsive strong {{
-            font-size: 0.85rem !important;
-        }}
-        
-        .footer-responsive em {{
-            font-size: 0.75rem !important;
-        }}
-    }}
-    </style>
     """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
