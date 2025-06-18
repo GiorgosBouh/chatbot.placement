@@ -45,73 +45,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Add mobile viewport meta tag and ensure proper CSS containment
-st.markdown("""
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<style>
-/* Ensure mobile-friendly viewport */
-html, body {
-    overflow-x: hidden !important;
-    max-width: 100vw !important;
-}
-
-/* Prevent horizontal scroll on mobile */
-.stApp {
-    max-width: 100vw !important;
-    overflow-x: hidden !important;
-}
-
-/* Mobile container improvements */
-@media (max-width: 768px) {
-    .block-container {
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
-        max-width: 100% !important;
-    }
-    
-    .main .block-container {
-        padding-top: 1rem !important;
-    }
-    
-    /* Fix for Streamlit's responsive issues */
-    .stMarkdown, .stButton, .stSelectbox, .stTextInput {
-        width: 100% !important;
-    }
-    
-    /* Sidebar improvements on mobile */
-    .css-1d391kg {
-        padding: 1rem !important;
-    }
-    
-    /* Chat input mobile optimization */
-    .stChatInputContainer {
-        padding: 0.5rem !important;
-    }
-}
-
-/* Very small mobile devices */
-@media (max-width: 480px) {
-    .block-container {
-        padding-left: 0.5rem !important;
-        padding-right: 0.5rem !important;
-    }
-    
-    h1, h2, h3 {
-        font-size: 1.2rem !important;
-        line-height: 1.3 !important;
-    }
-    
-    .stMarkdown h1 {
-        font-size: 1.4rem !important;
-    }
-    
-    .stMarkdown h3 {
-        font-size: 1.1rem !important;
-    }
-}
-</style>
-""", unsafe_allow_html=True)
-
 @dataclass
 class QAEntry:
     id: int
@@ -741,7 +674,20 @@ def main():
     
     # Single, comprehensive CSS styling block
     st.markdown("""
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
+    /* Ensure mobile-friendly viewport */
+    html, body {
+        overflow-x: hidden !important;
+        max-width: 100vw !important;
+    }
+
+    /* Prevent horizontal scroll on mobile */
+    .stApp {
+        max-width: 100vw !important;
+        overflow-x: hidden !important;
+    }
+    
     /* Main header styling */
     .main-header {
         background: linear-gradient(90deg, #1f4e79 0%, #2980b9 100%);
@@ -867,8 +813,46 @@ def main():
         scroll-margin-top: 100px;
     }
     
-    /* MOBILE RESPONSIVENESS */
+    /* COMPREHENSIVE MOBILE RESPONSIVENESS */
     @media (max-width: 768px) {
+        /* Container adjustments */
+        .block-container {
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+            max-width: 100% !important;
+        }
+        
+        .main .block-container {
+            padding-top: 1rem !important;
+        }
+        
+        /* Fix for Streamlit's responsive issues */
+        .stMarkdown, .stButton, .stSelectbox, .stTextInput {
+            width: 100% !important;
+        }
+        
+        /* Sidebar improvements on mobile */
+        .css-1d391kg {
+            padding: 1rem !important;
+        }
+        
+        /* Chat input mobile optimization */
+        .stChatInputContainer {
+            padding: 0.5rem !important;
+        }
+        
+        .stChatInput {
+            padding: 0 0.5rem !important;
+        }
+        
+        .stChatInput > div {
+            max-width: 100% !important;
+        }
+        
+        .stSpinner {
+            text-align: center !important;
+        }
+        
         /* Header responsive */
         .main-header {
             flex-direction: column;
@@ -960,23 +944,28 @@ def main():
             height: auto !important;
             min-height: 2.5rem !important;
         }
-        
-        /* Chat input responsive */
-        .stChatInput {
-            padding: 0 0.5rem !important;
-        }
-        
-        .stChatInput > div {
-            max-width: 100% !important;
-        }
-        
-        .stSpinner {
-            text-align: center !important;
-        }
     }
     
     /* Very small mobile devices */
     @media (max-width: 480px) {
+        .block-container {
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+        }
+        
+        h1, h2, h3 {
+            font-size: 1.2rem !important;
+            line-height: 1.3 !important;
+        }
+        
+        .stMarkdown h1 {
+            font-size: 1.4rem !important;
+        }
+        
+        .stMarkdown h3 {
+            font-size: 1.1rem !important;
+        }
+        
         .main-header {
             padding: 0.8rem;
         }
@@ -1333,4 +1322,4 @@ def main():
     """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
-    main()
+    main()main()
