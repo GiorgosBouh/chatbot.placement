@@ -310,26 +310,90 @@ class InternshipChatbot:
             print("⚠️ No relevant PDF content found")
             return ""
 
+    def get_relevant_json_context(self, question: str, max_entries: int = 3) -> str:
+        """Get relevant context from JSON Q&A data"""
+        if not self.qa_data:
+            return ""
+        
+        print(f"🔍 Searching JSON data for context...")
+        
+        # Find top relevant Q&A entries
+        matches = sorted(self.qa_data, 
+                        key=lambda x: self.calculate_similarity(question, x), 
+                        reverse=True)
+        
+        context_parts = []
+        for i, match in enumerate(matches[:max_entries]):
+            similarity = self.calculate_similarity(question, match)
+            print(f"   • JSON context {i+1}: '{match['question']}' (score: {similarity:.3f})")
+            
+            # Include entries with reasonable similarity
+            if similarity > 0.05:  # Lower threshold for context
+                context_parts.append(f"""
+ΕΡΩΤΗΣΗ: {match['question']}
+ΑΠΑΝΤΗΣΗ: {match['answer']}
+ΚΑΤΗΓΟΡΙΑ: {match.get('category', 'Άλλα')}
+""")
+        
+        if context_parts:
+            print(f"✅ Found {len(context_parts)} relevant JSON entries")
+            return "\n" + "="*30 + "\n".join(context_parts)
+        else:
+            print("⚠️ No relevant JSON context found")
+            return ""
+
     def get_ai_response_with_pdf(self, user_message: str) -> Tuple[str, bool]:
-        """Get AI response using PDF files as context"""
+        """Get AI response using PDF files + JSON data + general knowledge"""
         if not self.groq_client:
             return "", False
         
         try:
-            # Get PDF context
+            # Get PDF context from official documents
             pdf_context = self.search_pdf_files(user_message)
             
-            if not pdf_context:
-                return "", False
+            # Get relevant JSON context
+            json_context = self.get_relevant_json_context(user_message)
             
-            # Prepare the full prompt
-            full_prompt = f"""Βάσει των παρακάτω εγγράφων πρακτικής άσκησης:
+            # Build comprehensive context
+            context_parts = []
+            
+            if pdf_context:
+                context_parts.append(f"ΕΠΙΣΗΜΑ ΕΓΓΡΑΦΑ ΜΗΤΡΟΠΟΛΙΤΙΚΟΥ ΚΟΛΛΕΓΙΟΥ:\n{pdf_context}")
+            
+            if json_context:
+                context_parts.append(f"ΒΑΣΗ ΓΝΩΣΗΣ Q&A:\n{json_context}")
+            
+            # Enhanced prompt that combines all sources
+            if context_parts:
+                combined_context = "\n\n" + ("="*50 + "\n\n").join(context_parts)
+                
+                full_prompt = f"""Έχεις πρόσβαση στις παρακάτω πληροφορίες:
 
-{pdf_context}
+{combined_context}
 
 Ερώτηση φοιτητή: {user_message}
 
-Χρησιμοποίησε ΜΟΝΟ τις πληροφορίες από τα έγγραφα για να απαντήσεις."""
+ΟΔΗΓΙΕΣ:
+1. Χρησιμοποίησε πληροφορίες από ΕΠΙΣΗΜΑ ΕΓΓΡΑΦΑ (υψηλή προτεραιότητα)
+2. Συμπλήρωσε με πληροφορίες από τη ΒΑΣΗ ΓΝΩΣΗΣ Q&A
+3. Συνδύασε με τη γενική σου γνώση για πρακτική άσκηση
+4. Δώσε πλήρη, ακριβή και χρήσιμη απάντηση
+5. Αν υπάρχουν αντικρουόμενες πληροφορίες, προτίμησε τα επίσημα έγγραφα
+6. Αναφέρου ότι οι πληροφορίες βασίζονται σε επίσημες πηγές του κολλεγίου"""
+            else:
+                # No relevant context found - use general knowledge with college info
+                full_prompt = f"""Ερώτηση φοιτητή για πρακτική άσκηση: {user_message}
+
+CONTEXT: Φοιτητής στο τμήμα Προπονητικής & Φυσικής Αγωγής, Μητροπολιτικό Κολλέγιο Θεσσαλονίκης
+
+ΒΑΣΙΚΕΣ ΠΛΗΡΟΦΟΡΙΕΣ:
+- Απαιτούνται 240 ώρες πρακτικής άσκησης
+- Προθεσμία: 30 Μαΐου  
+- Υπεύθυνος: Γεώργιος Σοφιανίδης (gsofianidis@mitropolitiko.edu.gr)
+- Ωράριο: Δευτέρα-Σάββατο, μέχρι 8 ώρες/ημέρα
+
+Απάντησε με βάση τη γενική σου γνώση για πρακτική άσκηση στην Ελλάδα.
+Δώσε πρακτικές, χρήσιμες συμβουλές και πρότεινε να επικοινωνήσει με τον υπεύθυνο για επιβεβαίωση."""
 
             # Call Groq API
             chat_completion = self.groq_client.chat.completions.create(
@@ -338,8 +402,8 @@ class InternshipChatbot:
                     {"role": "user", "content": full_prompt}
                 ],
                 model="llama-3.1-8b-instant",
-                temperature=0.1,
-                max_tokens=800,
+                temperature=0.2,  # Balanced for accuracy + natural responses
+                max_tokens=1000,  # Increased for comprehensive answers
                 top_p=0.9,
                 stream=False
             )
@@ -354,7 +418,7 @@ class InternshipChatbot:
             return response, True
             
         except Exception as e:
-            print(f"❌ PDF AI Error: {e}")
+            print(f"❌ PDF+JSON AI Error: {e}")
             return "", False
 
     def get_general_ai_response(self, user_message: str) -> Tuple[str, bool]:
@@ -566,67 +630,35 @@ class InternshipChatbot:
             return smart_response, False
 
     def get_response(self, question: str) -> str:
-        """Get chatbot response - JSON FIRST, then PDF AI, then General AI, then JSON fallback"""
+        """Get chatbot response - JSON FIRST, then PDF AI (PRIORITY), then JSON fallback"""
         if not self.qa_data:
             return "Δεν υπάρχουν διαθέσιμα δεδομένα γνώσης."
         
         print(f"\n🤖 Processing question: '{question}'")
         
-        # Step 1: Try JSON fallback FIRST
-        print("📋 Step 1: Trying JSON data matching...")
+        # Step 1: Try JSON for exact matches FIRST
+        print("📋 Step 1: Checking JSON for exact matches...")
         json_response, found_exact_match = self.get_fallback_response(question)
         
         if found_exact_match:
             print("✅ Found exact match in JSON data")
             return json_response
         
-        # Step 2: Try PDF AI search
-        print("📄 Step 2: No good JSON match, trying PDF AI search...")
+        # Step 2: PDF+JSON AI search (PRIORITY) - Comprehensive approach!
+        print("📄 Step 2: PDF+JSON AI search - combining all sources...")
         
         if self.groq_client and PDF_AVAILABLE:
             pdf_response, success = self.get_ai_response_with_pdf(question)
             if success and pdf_response.strip():
-                print("✅ PDF AI response successful")
+                print("✅ PDF+JSON AI response successful - used comprehensive context")
                 return pdf_response
+            else:
+                print("⚠️ PDF+JSON AI search failed or no relevant content found")
+        else:
+            print("⚠️ PDF+JSON AI not available (missing Groq client or PDF library)")
         
-        # Step 3: Try General AI with context
-        print("🤖 Step 3: PDF search failed, trying General AI...")
-        
-        if self.groq_client:
-            general_ai_response, success = self.get_general_ai_response(question)
-            if success and general_ai_response.strip():
-                print("✅ General AI response successful")
-                # Add verification disclaimer for General AI responses
-                disclaimer = "\n\n⚠️ **Σημείωση:** Σε κάθε περίπτωση, αυτή η απάντηση χρειάζεται επαλήθευση από τον υπεύθυνο πρακτικής Γεώργιο Σοφιανίδη (gsofianidis@mitropolitiko.edu.gr)."
-                return general_ai_response + disclaimer
-        
-        # Step 4: Try regular AI with JSON context (fallback)
-        print("🔄 Step 4: General AI failed, trying AI with JSON context...")
-        
-        if self.groq_client:
-            # Find relevant context for AI
-            matches = sorted(self.qa_data, 
-                            key=lambda x: self.calculate_similarity(question, x), 
-                            reverse=True)
-            
-            # Prepare context from top matches
-            context_parts = []
-            for match in matches[:3]:
-                similarity = self.calculate_similarity(question, match)
-                print(f"   • Context candidate: '{match['question']}' (score: {similarity:.3f})")
-                if similarity > 0.1:
-                    context_parts.append(f"Q: {match['question']}\nA: {match['answer']}")
-            
-            context = "\n\n".join(context_parts) if context_parts else ""
-            
-            if context:
-                ai_response, success = self.get_ai_response(question, context)
-                if success and ai_response.strip():
-                    print("✅ Regular AI response successful")
-                    return ai_response
-        
-        # Step 5: Final fallback to JSON (even if low similarity)
-        print("📋 Step 5: Using JSON fallback response")
+        # Step 3: JSON fallback (if PDFs have nothing useful)
+        print("📋 Step 3: Using JSON fallback response...")
         return json_response
 
 def initialize_qa_file():
@@ -853,12 +885,12 @@ def main():
     # API Status
     if st.session_state.chatbot.groq_client:
         if PDF_AVAILABLE:
-            st.markdown(f'<div class="api-status">📋 JSON + PDF ({PDF_METHOD})</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="api-status">📄 PDF+JSON ({PDF_METHOD})</div>', unsafe_allow_html=True)
         else:
             st.markdown('<div class="api-status">📋 JSON First Mode</div>', unsafe_allow_html=True)
         
     # Επαγγελματική ενδειξη για sidebar
-    status_text = "JSON → PDF → AI → Fallback" if PDF_AVAILABLE else "JSON → AI → Fallback"
+    status_text = "JSON → PDF+JSON AI → JSON Fallback" if PDF_AVAILABLE else "JSON → AI → Fallback"
     st.markdown(f"""
     <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.6rem; margin-bottom: 1.5rem; text-align: center; font-size: 0.9rem;">
         <strong>Πληροφορίες:</strong> Χρησιμοποιήστε το αριστερό μενού για συχνές ερωτήσεις και επικοινωνία 👈<br>
@@ -872,16 +904,14 @@ def main():
         
         st.markdown("""
         **Υπεύθυνος Πρακτικής Άσκησης**  
-        **Γεώργιος Σοφιανίδης**
-        **2314409000**  
+        **Γεώργιος Σοφιανίδης**  
         📧 gsofianidis@mitropolitiko.edu.gr
         
-        **Σχεδιασμός/Δημιουργία/Τεχνική Υποστήριξη**  
+        **Τεχνική Υποστήριξη**  
         **Γεώργιος Μπουχουράς**  
         📧 gbouchouras@mitropolitiko.edu.gr
-        
-        **Κανένα επίσημο έγγραφο δεν υπάρχει ή κατατίθεται στην παρούσα εφαρμογή**
         """)
+
         st.markdown("---")
 
         # Συχνές ερωτήσεις
@@ -909,15 +939,15 @@ def main():
         # AI Status
         if st.session_state.chatbot.groq_client:
             if PDF_AVAILABLE:
-                st.success(f"📋 JSON + PDF Mode ({PDF_METHOD})")
-                st.info("AI ψάχνει σε επίσημα έγγραφα")
+                st.success(f"📄 PDF+JSON Mode ({PDF_METHOD})")
+                st.info("AI συνδυάζει επίσημα έγγραφα + JSON βάση γνώσης")
             else:
                 st.success("📋 JSON First Mode")
                 st.warning("PDF search απενεργοποιημένο")
         else:
             st.warning("📚 JSON Only Mode")
             if GROQ_AVAILABLE:
-                st.info("Για AI+PDF, χρειάζεται Groq API key")
+                st.info("Για PDF+JSON AI, χρειάζεται Groq API key")
             else:
                 st.error("Groq library δεν είναι διαθέσιμη")
 
@@ -934,7 +964,7 @@ def main():
             
             # Enhanced debugging info
             st.write("**System Status:**")
-            st.write("• Response Priority: JSON → PDF → General AI → JSON Fallback")
+            st.write("• Response Priority: JSON → PDF+JSON AI → JSON Fallback")
             st.write("• Groq Available:", GROQ_AVAILABLE)
             st.write("• Groq Client:", st.session_state.chatbot.groq_client is not None)
             st.write("• PDF Available:", PDF_AVAILABLE)
@@ -1057,7 +1087,7 @@ def main():
         st.rerun()
 
     # Footer
-    footer_text = "JSON-First + PDF AI Assistant" if PDF_AVAILABLE else "JSON-First AI Assistant"
+    footer_text = "JSON-First + PDF+JSON AI Assistant" if PDF_AVAILABLE else "JSON-First AI Assistant"
     st.markdown(f"""
     <div style="text-align: center; color: #6c757d; padding: 1rem;">
         <small>
