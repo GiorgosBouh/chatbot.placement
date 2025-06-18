@@ -37,7 +37,7 @@ except ImportError:
         fitz = None
         print("⚠️ No PDF library available. PDF search disabled.")
 
-# Ρύθμιση σελίδας - Mobile Optimized
+# Ρύθμιση σελίδας
 st.set_page_config(
     page_title="Πρακτική Άσκηση - Μητροπολιτικό Κολλέγιο",
     page_icon="🎓",
@@ -672,23 +672,9 @@ def initialize_qa_file():
 def main():
     """Main Streamlit application - Git-first content management"""
     
-    # Single, comprehensive CSS styling block
+    # CSS Styling
     st.markdown("""
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
-    /* Ensure mobile-friendly viewport */
-    html, body {
-        overflow-x: hidden !important;
-        max-width: 100vw !important;
-    }
-
-    /* Prevent horizontal scroll on mobile */
-    .stApp {
-        max-width: 100vw !important;
-        overflow-x: hidden !important;
-    }
-    
-    /* Main header styling */
     .main-header {
         background: linear-gradient(90deg, #1f4e79 0%, #2980b9 100%);
         color: white;
@@ -713,7 +699,14 @@ def main():
         object-fit: contain;
     }
     
-    /* Message styling */
+    .logo-container {
+        display: flex;
+        align-items: center;
+        margin-bottom: 2rem;
+        padding: 1rem 0;
+        border-bottom: 1px solid #e8f4f8;
+    }
+    
     .user-message {
         background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
         border: 1px solid #dee2e6;
@@ -746,7 +739,6 @@ def main():
         text-decoration: underline !important;
     }
     
-    /* Info cards */
     .info-card {
         background: white;
         border: 1px solid #e8f4f8;
@@ -762,7 +754,6 @@ def main():
         box-shadow: 0 4px 16px rgba(0,0,0,0.12);
     }
     
-    /* API Status */
     .api-status {
         position: fixed;
         top: 20px;
@@ -776,7 +767,22 @@ def main():
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     
-    /* Chat container */
+    .quick-stats {
+        display: flex;
+        justify-content: space-around;
+        margin: 2rem 0;
+        gap: 1rem;
+    }
+    
+    .stat-item {
+        text-align: center;
+        background: white;
+        padding: 1rem;
+        border-radius: 8px;
+        border: 1px solid #e8f4f8;
+        flex: 1;
+    }
+    
     .chat-container {
         background: white;
         border-radius: 10px;
@@ -786,7 +792,6 @@ def main():
         border: 1px solid #e8f4f8;
     }
     
-    /* Streamlit component styling */
     .stTextInput > div > div > input {
         border-radius: 20px;
         border: 2px solid #e8f4f8;
@@ -806,184 +811,6 @@ def main():
     .stButton > button:hover {
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(31, 78, 121, 0.3);
-    }
-    
-    /* Auto-scroll target */
-    .latest-message {
-        scroll-margin-top: 100px;
-    }
-    
-    /* COMPREHENSIVE MOBILE RESPONSIVENESS */
-    @media (max-width: 768px) {
-        /* Container adjustments */
-        .block-container {
-            padding-left: 1rem !important;
-            padding-right: 1rem !important;
-            max-width: 100% !important;
-        }
-        
-        .main .block-container {
-            padding-top: 1rem !important;
-        }
-        
-        /* Fix for Streamlit's responsive issues */
-        .stMarkdown, .stButton, .stSelectbox, .stTextInput {
-            width: 100% !important;
-        }
-        
-        /* Sidebar improvements on mobile */
-        .css-1d391kg {
-            padding: 1rem !important;
-        }
-        
-        /* Chat input mobile optimization */
-        .stChatInputContainer {
-            padding: 0.5rem !important;
-        }
-        
-        .stChatInput {
-            padding: 0 0.5rem !important;
-        }
-        
-        .stChatInput > div {
-            max-width: 100% !important;
-        }
-        
-        .stSpinner {
-            text-align: center !important;
-        }
-        
-        /* Header responsive */
-        .main-header {
-            flex-direction: column;
-            gap: 1rem;
-            padding: 1rem;
-        }
-        
-        .header-logo {
-            max-height: 60px;
-            max-width: 100px;
-        }
-        
-        .header-content h1 {
-            font-size: 1.5rem !important;
-            margin-bottom: 0.5rem !important;
-        }
-        
-        .header-content h3 {
-            font-size: 1.1rem !important;
-            margin-bottom: 0.5rem !important;
-        }
-        
-        .header-content p {
-            font-size: 0.9rem !important;
-        }
-        
-        /* Messages responsive */
-        .user-message, .ai-message {
-            padding: 0.8rem;
-            margin: 0.8rem 0;
-            font-size: 0.9rem;
-            line-height: 1.4;
-        }
-        
-        .user-message strong, .ai-message strong {
-            font-size: 0.9rem;
-        }
-        
-        /* Info cards responsive */
-        .info-card {
-            padding: 1rem;
-            margin: 0.3rem 0;
-        }
-        
-        .info-card h4 {
-            font-size: 1rem !important;
-            margin-bottom: 0.3rem !important;
-        }
-        
-        .info-card p {
-            font-size: 1rem !important;
-        }
-        
-        .info-card small {
-            font-size: 0.8rem !important;
-        }
-        
-        /* API Status responsive */
-        .api-status {
-            position: static;
-            display: inline-block;
-            margin: 1rem 0;
-            font-size: 0.8rem;
-            padding: 0.4rem 0.8rem;
-        }
-        
-        /* Chat container responsive */
-        .chat-container {
-            padding: 1rem;
-            margin-top: 1rem;
-        }
-        
-        /* Streamlit column responsiveness fix */
-        .stColumns {
-            flex-direction: column !important;
-        }
-        
-        .stColumns > div {
-            width: 100% !important;
-            margin-bottom: 1rem !important;
-        }
-        
-        /* FAQ Buttons responsive */
-        .stButton > button {
-            font-size: 0.8rem !important;
-            padding: 0.4rem 0.8rem !important;
-            line-height: 1.2 !important;
-            white-space: normal !important;
-            height: auto !important;
-            min-height: 2.5rem !important;
-        }
-    }
-    
-    /* Very small mobile devices */
-    @media (max-width: 480px) {
-        .block-container {
-            padding-left: 0.5rem !important;
-            padding-right: 0.5rem !important;
-        }
-        
-        h1, h2, h3 {
-            font-size: 1.2rem !important;
-            line-height: 1.3 !important;
-        }
-        
-        .stMarkdown h1 {
-            font-size: 1.4rem !important;
-        }
-        
-        .stMarkdown h3 {
-            font-size: 1.1rem !important;
-        }
-        
-        .main-header {
-            padding: 0.8rem;
-        }
-        
-        .header-content h1 {
-            font-size: 1.3rem !important;
-        }
-        
-        .header-content h3 {
-            font-size: 1rem !important;
-            line-height: 1.3 !important;
-        }
-        
-        .user-message, .ai-message {
-            padding: 0.6rem;
-            margin: 0.6rem 0;
-            font-size: 0.85rem;
-        }
     }
     </style>
     """, unsafe_allow_html=True)
@@ -1023,71 +850,69 @@ def main():
         if new_data_count != current_data_count:
             st.toast(f"📊 Δεδομένα ενημερώθηκαν: {new_data_count} ερωτήσεις")
 
-    # Quick info cards - Mobile Responsive
+    # Quick info cards
     st.markdown("### 📊 Σημαντικές Πληροφορίες")
     
-    # Use responsive approach for mobile
-    if st.session_state.get('mobile_view', False) or True:  # Always use responsive
-        # Single column layout for better mobile experience
-        info_cols = st.columns([1, 1, 1])
+    quick_col1, quick_col2, quick_col3 = st.columns(3)
+    
+    with quick_col1:
+        st.markdown("""
+        <div class="info-card" style="text-align: center;">
+            <h4 style="color: #1f4e79; margin-bottom: 0.5rem;">📅 Απαιτούμενες Ώρες</h4>
+            <p style="font-size: 1.2rem; font-weight: 600; color: #28a745; margin: 0;">240 ώρες</p>
+            <small style="color: #6c757d;">Προθεσμία: 30 Μαϊου</small>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with quick_col2:
+        st.markdown("""
+        <div class="info-card" style="text-align: center;">
+            <h4 style="color: #1f4e79; margin-bottom: 0.5rem;">📋 Παράδοση Συμβάσεων</h4>
+            <p style="font-size: 1.2rem; font-weight: 600; color: #ffc107; margin: 0;">Moodle Platform</p>
+            <small style="color: #6c757d;">Προθεσμία: 15 Οκτωβρίου</small>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with quick_col3:
+        st.markdown("""
+        <div class="info-card" style="text-align: center;">
+            <h4 style="color: #1f4e79; margin-bottom: 0.5rem;">⏰ Επιτρεπόμενο Ωράριο</h4>
+            <p style="font-size: 1.2rem; font-weight: 600; color: #17a2b8; margin: 0;">Δευτέρα-Σάββατο</p>
+            <small style="color: #6c757d;">Μέχρι 8 ώρες ανά ημέρα</small>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # API Status
+    if st.session_state.chatbot.groq_client:
+        if PDF_AVAILABLE:
+            st.markdown(f'<div class="api-status">📄 PDF+JSON ({PDF_METHOD})</div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="api-status">📋 JSON First Mode</div>', unsafe_allow_html=True)
         
-        with info_cols[0]:
-            st.markdown("""
-            <div class="info-card" style="text-align: center;">
-                <h4 style="color: #1f4e79; margin-bottom: 0.5rem;">📅 Απαιτούμενες Ώρες</h4>
-                <p style="font-size: 1.2rem; font-weight: 600; color: #28a745; margin: 0;">240 ώρες</p>
-                <small style="color: #6c757d;">Προθεσμία: 30 Μαϊου</small>
-            </div>
-            """, unsafe_allow_html=True)
-
-        with info_cols[1]:
-            st.markdown("""
-            <div class="info-card" style="text-align: center;">
-                <h4 style="color: #1f4e79; margin-bottom: 0.5rem;">📋 Παράδοση Συμβάσεων</h4>
-                <p style="font-size: 1.2rem; font-weight: 600; color: #ffc107; margin: 0;">Moodle Platform</p>
-                <small style="color: #6c757d;">Προθεσμία: 15 Οκτωβρίου</small>
-            </div>
-            """, unsafe_allow_html=True)
-
-        with info_cols[2]:
-            st.markdown("""
-            <div class="info-card" style="text-align: center;">
-                <h4 style="color: #1f4e79; margin-bottom: 0.5rem;">⏰ Επιτρεπόμενο Ωράριο</h4>
-                <p style="font-size: 1.2rem; font-weight: 600; color: #17a2b8; margin: 0;">Δευτέρα-Σάββατο</p>
-                <small style="color: #6c757d;">Μέχρι 8 ώρες ανά ημέρα</small>
-            </div>
-            """, unsafe_allow_html=True)
-
-    # API Status - Mobile Responsive
-    api_status_container = st.container()
-    with api_status_container:
-        if st.session_state.chatbot.groq_client:
-            if PDF_AVAILABLE:
-                st.markdown(f'<div class="api-status">📄 PDF+JSON ({PDF_METHOD})</div>', unsafe_allow_html=True)
-            else:
-                st.markdown('<div class="api-status">📋 JSON First Mode</div>', unsafe_allow_html=True)
-        
-    # Επαγγελματική ενδειξη για sidebar - Mobile Responsive
+    # Επαγγελματική ενδειξη για sidebar
     status_text = "JSON → PDF+JSON AI → JSON Fallback" if PDF_AVAILABLE else "JSON → AI → Fallback"
     st.markdown(f"""
     <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.6rem; margin-bottom: 1.5rem; text-align: center; font-size: 0.9rem;">
         <strong>Πληροφορίες:</strong> Χρησιμοποιήστε το αριστερό μενού για συχνές ερωτήσεις και επικοινωνία 👈<br>
-        <small style="font-size: 0.8rem; display: block; margin-top: 0.3rem;">🔄 Προτεραιότητα: {status_text}</small>
+        <small>🔄 Προτεραιότητα: {status_text}</small>
     </div>
     """, unsafe_allow_html=True)
 
     # Sidebar
     with st.sidebar:
-        st.markdown("## 📞 Επικοινωνία")
+        st.markdown("## 🗣️ Επικοινωνία")
         
         st.markdown("""
         **Υπεύθυνος Πρακτικής Άσκησης**  
         **Γεώργιος Σοφιανίδης**  
-        📧 gsofianidis@mitropolitiko.edu.gr
+        **📞 2314409000**
+       ** 📧 gsofianidis@mitropolitiko.edu.gr**
         
-        **Τεχνική Υποστήριξη**  
+        **Σχεδιασμός/Ανάπτυξη/Τεχνική Υποστήριξη**  
         **Γεώργιος Μπουχουράς**  
         📧 gbouchouras@mitropolitiko.edu.gr
+
+        ⚠️ Κανένα επίσημο έγγραφο δεν υπάρχει ή κατατίθεται στην παρούσα εφαρμογή
         """)
 
         st.markdown("---")
@@ -1232,18 +1057,14 @@ def main():
     st.markdown('<div class="chat-container">', unsafe_allow_html=True)
     st.markdown("### 💬 Κάντε την ερώτησή σας")
 
-    # Display chat messages with auto-scroll
-    message_count = len(st.session_state.messages)
-    for i, message in enumerate(st.session_state.messages):
-        # Add latest-message class to the most recent message for auto-scroll
-        latest_class = "latest-message" if i == message_count - 1 else ""
-        
+    # Display chat messages
+    for message in st.session_state.messages:
         if message["role"] == "user":
-            st.markdown(f'<div class="user-message {latest_class}"><strong>Εσείς:</strong> {message["content"]}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="user-message"><strong>Εσείς:</strong> {message["content"]}</div>', unsafe_allow_html=True)
         else:
             # Convert markdown to HTML for better display
             content = message["content"].replace('\n', '<br>')
-            st.markdown(f'<div class="ai-message {latest_class}"><strong>🤖 Assistant:</strong><br><br>{content}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="ai-message"><strong>🤖 Assistant:</strong><br><br>{content}</div>', unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1268,55 +1089,14 @@ def main():
         # Rerun to display new messages
         st.rerun()
 
-    # Auto-scroll JavaScript (triggered after new messages)
-    if len(st.session_state.messages) > 0:
-        st.markdown("""
-        <script>
-        // Enhanced auto-scroll for mobile compatibility
-        function smoothScrollToLatest() {
-            setTimeout(function() {
-                const latestMessage = document.querySelector('.latest-message');
-                if (latestMessage) {
-                    // For mobile, scroll to message with some offset
-                    const rect = latestMessage.getBoundingClientRect();
-                    const offset = window.innerWidth <= 768 ? 100 : 50;
-                    
-                    window.scrollTo({ 
-                        top: window.pageYOffset + rect.top - offset,
-                        behavior: 'smooth' 
-                    });
-                } else {
-                    // Fallback: scroll to bottom with mobile consideration
-                    const scrollHeight = document.body.scrollHeight;
-                    const viewportHeight = window.innerHeight;
-                    const targetScroll = Math.max(0, scrollHeight - viewportHeight + 50);
-                    
-                    window.scrollTo({ 
-                        top: targetScroll,
-                        behavior: 'smooth' 
-                    });
-                }
-            }, 300); // Increased delay for mobile rendering
-        }
-        
-        // Execute scroll
-        smoothScrollToLatest();
-        
-        // Additional check for mobile devices
-        if (window.innerWidth <= 768) {
-            setTimeout(smoothScrollToLatest, 600);
-        }
-        </script>
-        """, unsafe_allow_html=True)
-
-    # Footer - Mobile Responsive
+    # Footer
     footer_text = "JSON-First + PDF+JSON AI Assistant" if PDF_AVAILABLE else "JSON-First AI Assistant"
     st.markdown(f"""
     <div style="text-align: center; color: #6c757d; padding: 1rem;">
-        <small style="line-height: 1.4;">
-            🎓 <strong>Μητροπολιτικό Κολλέγιο Θεσσαλονίκης</strong><br>
-            <span style="display: inline-block; margin: 0.2rem 0;">Τμήμα Προπονητικής & Φυσικής Αγωγής</span><br>
-            <em style="font-size: 0.85em;">{footer_text}</em>
+        <small>
+            🎓 <strong>Μητροπολιτικό Κολλέγιο Θεσσαλονίκης</strong> | 
+            Τμήμα Προπονητικής & Φυσικής Αγωγής<br>
+            <em>{footer_text}</em>
         </small>
     </div>
     """, unsafe_allow_html=True)
