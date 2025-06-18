@@ -900,12 +900,12 @@ def main():
 
     # Sidebar
     with st.sidebar:
-        st.markdown("## 📞 Επικοινωνία")
+        st.markdown("## 🗣️  Επικοινωνία")
         
         st.markdown("""
         **Υπεύθυνος Πρακτικής Άσκησης**  
         **Γεώργιος Σοφιανίδης**  
-        📞 2314409000
+        **📞 2314409000**
         📧 gsofianidis@mitropolitiko.edu.gr
         
         **Σχεδιασμός/Ανάπτυξη/Τεχνική Υποστήριξη**  
