@@ -5,8 +5,10 @@ import os
 import datetime
 import requests
 import io
-from typing import List, Dict, Tuple
+import numpy as np
+from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
+import hashlib
 
 # Import Groq with fallback handling
 try:
@@ -37,6 +39,18 @@ except ImportError:
         fitz = None
         print("⚠️ No PDF library available. PDF search disabled.")
 
+# Import RAG dependencies
+try:
+    from sentence_transformers import SentenceTransformer
+    import faiss
+    RAG_AVAILABLE = True
+    print("✅ RAG libraries (sentence-transformers, faiss) imported successfully")
+except ImportError:
+    RAG_AVAILABLE = False
+    SentenceTransformer = None
+    faiss = None
+    print("⚠️ RAG libraries not available. Install: pip install sentence-transformers faiss-cpu")
+
 # Ρύθμιση σελίδας
 st.set_page_config(
     page_title="Πρακτική Άσκηση - Μητροπολιτικό Κολλέγιο",
@@ -46,6 +60,14 @@ st.set_page_config(
 )
 
 @dataclass
+class DocumentChunk:
+    id: str
+    content: str
+    source: str
+    chunk_type: str  # 'qa', 'pdf'
+    metadata: Dict
+
+@dataclass
 class QAEntry:
     id: int
     category: str
@@ -53,9 +75,9 @@ class QAEntry:
     answer: str
     keywords: List[str]
 
-class InternshipChatbot:
+class RAGInternshipChatbot:
     def __init__(self, groq_api_key: str = None):
-        # Initialize Groq client if available and API key provided
+        # Initialize Groq client
         self.groq_client = None
         if GROQ_AVAILABLE and groq_api_key:
             try:
@@ -64,10 +86,30 @@ class InternshipChatbot:
             except Exception as e:
                 print(f"⚠️ Failed to initialize Groq: {e}")
         
+        # Initialize RAG components
+        self.embedder = None
+        self.faiss_index = None
+        self.document_chunks = []
+        self.embeddings_cache = {}
+        
+        # Initialize RAG if available
+        if RAG_AVAILABLE:
+            try:
+                print("🔄 Initializing RAG system...")
+                # Use multilingual model that works well with Greek
+                self.embedder = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+                print("✅ RAG embedding model loaded")
+                self.rag_initialized = True
+            except Exception as e:
+                print(f"⚠️ Failed to initialize RAG: {e}")
+                self.rag_initialized = False
+        else:
+            self.rag_initialized = False
+        
         # Load Q&A data
         self.qa_data = self.load_qa_data()
         
-        # Initialize PDF files cache - same names as DOCX but with .pdf extension
+        # Initialize PDF files cache
         self.pdf_cache = {}
         self.pdf_files = [
             "1.ΑΙΤΗΣΗ ΠΡΑΓΜΑΤΟΠΟΙΗΣΗΣ ΠΡΑΚΤΙΚΗΣ ΑΣΚΗΣΗΣ.pdf",
@@ -79,90 +121,83 @@ class InternshipChatbot:
             "8.ΒΙΒΛΙΟ_ΠΡΑΚΤΙΚΗΣ_final.pdf"
         ]
         
-        # System prompt για το LM
+        # Build RAG database if available
+        if self.rag_initialized:
+            self.build_rag_database()
+        
+        # Enhanced system prompt for RAG
         self.system_prompt = """Είσαι ένας εξειδικευμένος σύμβουλος για θέματα πρακτικής άσκησης στο Μητροπολιτικό Κολλέγιο Θεσσαλονίκης, τμήμα Προπονητικής και Φυσικής Αγωγής.
 
-ΚΡΙΣΙΜΕΣ ΓΛΩΣΣΙΚΕΣ ΟΔΗΓΙΕΣ:
-- Χρησιμοποίησε ΑΠΟΚΛΕΙΣΤΙΚΑ και ΜΟΝΟ ελληνικούς χαρακτήρες
-- ΑΠΑΓΟΡΕΥΟΝΤΑΙ: αγγλικά, κινέζικα, greeklish ή οποιοιδήποτε άλλοι χαρακτήρες
-- Ελέγχισε κάθε λέξη πριν την εκτύπωση - πρέπει να είναι ελληνική
-- Αν δεν ξέρεις ελληνική λέξη, χρησιμοποίησε περιφραστικό τρόπο
+ΧΡΗΣΙΜΟΠΟΙΕΙΣ ΣΥΣΤΗΜΑ RAG (Retrieval-Augmented Generation):
+- Έχεις πρόσβαση σε σημασιολογικώς σχετικό περιεχόμενο από επίσημα έγγραφα και βάση γνώσης
+- Το σύστημα αναζήτησης εντοπίζει τα πιο σχετικά τμήματα κειμένου για κάθε ερώτηση
+- Χρησιμοποίησε το παρεχόμενο περιεχόμενο για να δώσεις ακριβείς και χρήσιμες απαντήσεις
 
-ΚΡΙΤΙΚΕΣ ΟΔΗΓΙΕΣ:
-- Μην προσθέτεις πληροφορίες που δεν υπάρχουν στο context
-- Χρησιμοποίησε ΜΟΝΟ τις πληροφορίες που σου δίνονται
-- Μην εφευρίσκεις ή μην υποθέτεις στοιχεία
+ΚΡΙΣΙΜΕΣ ΓΛΩΣΣΙΚΕΣ ΟΔΗΓΙΕΣ:
+- Χρησιμοποίησε ΑΠΟΚΛΕΙΣΤΙΚΑ ελληνικούς χαρακτήρες
+- ΑΠΑΓΟΡΕΥΟΝΤΑΙ: αγγλικά, κινέζικα, greeklish ή άλλοι χαρακτήρες
+- Ελέγχισε κάθε λέξη πριν την εκτύπωση
+
+ΙΕΡΑΡΧΙΑ ΠΛΗΡΟΦΟΡΙΩΝ:
+1. ΕΠΙΣΗΜΑ ΕΓΓΡΑΦΑ PDF (υψηλότερη προτεραιότητα)
+2. ΒΑΣΗ ΓΝΩΣΗΣ JSON (μέση προτεραιότητα)
+3. ΓΕΝΙΚΗ ΓΝΩΣΗ (χαμηλή προτεραιότητα)
+
+ΣΤΡΑΤΗΓΙΚΗ RAG:
+1. Αναλύσε τις ανακτημένες πληροφορίες για σχετικότητα
+2. Συνδύασε πληροφορίες από διαφορετικές πηγές όταν χρειάζεται
+3. Χρησιμοποίησε σημασιολογική κατανόηση για βαθύτερη ανάλυση
+4. Δώσε δομημένες, πρακτικές απαντήσεις με συγκεκριμένα βήματα
 
 ΣΤΥΛ ΑΠΑΝΤΗΣΗΣ:
-- Αυστηρά επίσημος και επαγγελματικός τόνος
-- Άμεσες και συγκεκριμένες οδηγίες
-- Χωρίς χαιρετισμούς, φιλικές εκφράσεις ή περιττά λόγια
+- Επαγγελματικός και επίσημος τόνος
 - Δομημένες απαντήσεις με σαφή βήματα
-- Χωρίς emojis ή άτυπες εκφράσεις
+- Συγκεκριμένες οδηγίες και πρακτικές συμβουλές
+- Αναφορά στις πηγές όταν χρησιμοποιείς συγκεκριμένες πληροφορίες
 
-ΒΑΣΙΚΕΣ ΠΛΗΡΟΦΟΡΙΕΣ (μόνο αυτές):
-- Υπεύθυνος Πρακτικής Άσκησης: Γεώργιος Σοφιανίδης
-- Email: gsofianidis@mitropolitiko.edu.gr
+ΒΑΣΙΚΕΣ ΠΛΗΡΟΦΟΡΙΕΣ (πάντα διαθέσιμες):
+- Υπεύθυνος: Γεώργιος Σοφιανίδης (gsofianidis@mitropolitiko.edu.gr)  
 - Τεχνική Υποστήριξη: Γεώργιος Μπουχουράς (gbouchouras@mitropolitiko.edu.gr)
 - Απαιτούμενες ώρες: 240 ώρες μέχρι 30/5
 - Ωράριο: Δευτέρα-Σάββατο, μέχρι 8 ώρες/ημέρα
 - Σύμβαση: Ανέβασμα στο moodle μέχρι 15/10
 
-ΤΕΛΙΚΟΣ ΕΛΕΓΧΟΣ:
-- Κάθε απάντηση πρέπει να περιέχει ΜΟΝΟ ελληνικούς χαρακτήρες
-- Καμία ξένη λέξη ή χαρακτήρας δεν επιτρέπεται
-- Επαγγελματικό ύφος χωρίς φιλικότητες
-
-Απάντησε στα ελληνικά με αυστηρά επαγγελματικό τόνο χρησιμοποιώντας μόνο τις δοσμένες πληροφορίες."""
+Απάντησε πάντα στα ελληνικά με επαγγελματικό τόνο χρησιμοποιώντας το σύστημα RAG."""
 
     def load_qa_data(self) -> List[Dict]:
-        """Load Q&A data with better error handling and debugging"""
+        """Load Q&A data with better error handling"""
         filename = "qa_data.json"
         
         print(f"🔍 Looking for {filename}...")
         
-        # Check if file exists
         if not os.path.exists(filename):
-            print(f"❌ File {filename} not found in current directory")
-            print(f"📁 Current directory: {os.getcwd()}")
-            print(f"📂 Files in directory: {[f for f in os.listdir('.') if f.endswith('.json')]}")
+            print(f"❌ File {filename} not found")
             return self.get_updated_fallback_data()
         
-        # Try to load the file
         try:
             with open(filename, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 
-            # Validate data structure
-            if not isinstance(data, list):
-                print(f"❌ Invalid data format in {filename} - expected list")
+            if not isinstance(data, list) or not data:
+                print(f"❌ Invalid data format in {filename}")
                 return self.get_updated_fallback_data()
             
-            if not data:
-                print(f"❌ Empty data in {filename}")
-                return self.get_updated_fallback_data()
-            
-            # Check data integrity
             required_fields = ['id', 'category', 'question', 'answer', 'keywords']
             for i, entry in enumerate(data):
                 if not all(field in entry for field in required_fields):
-                    print(f"❌ Missing fields in entry {i}: {entry.keys()}")
+                    print(f"❌ Missing fields in entry {i}")
                     return self.get_updated_fallback_data()
             
-            print(f"✅ Successfully loaded {len(data)} Q&A entries from {filename}")
-            print(f"📊 Entry IDs: {[entry['id'] for entry in data[:5]]}{'...' if len(data) > 5 else ''}")
+            print(f"✅ Successfully loaded {len(data)} Q&A entries")
             return data
             
-        except json.JSONDecodeError as e:
-            print(f"❌ JSON decode error in {filename}: {e}")
-            return self.get_updated_fallback_data()
         except Exception as e:
             print(f"❌ Error loading {filename}: {e}")
             return self.get_updated_fallback_data()
 
     def get_updated_fallback_data(self) -> List[Dict]:
         """Updated fallback data with more entries"""
-        print("📋 Using updated fallback data...")
+        print("📋 Using enhanced fallback data...")
         return [
             {
                 "id": 1,
@@ -220,23 +255,18 @@ class InternshipChatbot:
             return self.pdf_cache[filename]
         
         try:
-            # GitHub raw URL
             base_url = "https://raw.githubusercontent.com/GiorgosBouh/chatbot.placement/main/"
             url = base_url + filename
             
             print(f"🔍 Downloading {filename} from GitHub using {PDF_METHOD}...")
             
-            # Download file
             response = requests.get(url, timeout=10)
             response.raise_for_status()
             
-            # Extract text based on available library
             text_content = []
             
             if PDF_METHOD == "PyPDF2":
-                # Use PyPDF2
                 pdf_reader = PyPDF2.PdfReader(io.BytesIO(response.content))
-                
                 for page_num, page in enumerate(pdf_reader.pages):
                     try:
                         page_text = page.extract_text()
@@ -246,9 +276,7 @@ class InternshipChatbot:
                         print(f"⚠️ Error extracting page {page_num}: {e}")
                 
             elif PDF_METHOD == "PyMuPDF":
-                # Use PyMuPDF (fitz)
                 pdf_document = fitz.open(stream=response.content, filetype="pdf")
-                
                 for page_num in range(pdf_document.page_count):
                     try:
                         page = pdf_document[page_num]
@@ -257,143 +285,230 @@ class InternshipChatbot:
                             text_content.append(page_text.strip())
                     except Exception as e:
                         print(f"⚠️ Error extracting page {page_num}: {e}")
-                
                 pdf_document.close()
             
-            else:
-                return ""
-            
             full_text = "\n".join(text_content)
-            
-            # Cache the content
             self.pdf_cache[filename] = full_text
             
             print(f"✅ Successfully processed {filename} ({len(full_text)} characters)")
             return full_text
             
-        except requests.RequestException as e:
-            print(f"❌ Failed to download {filename}: {e}")
-            return ""
         except Exception as e:
             print(f"❌ Failed to process {filename}: {e}")
             return ""
 
-    def search_pdf_files(self, question: str) -> str:
-        """Search through all PDF files and compile context"""
-        if not PDF_AVAILABLE:
-            return ""
+    def chunk_text(self, text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
+        """Split text into overlapping chunks for better RAG performance"""
+        if len(text) <= chunk_size:
+            return [text]
         
-        print("📄 Searching PDF files...")
+        chunks = []
+        start = 0
         
-        context_parts = []
-        question_lower = question.lower()
-        
-        for filename in self.pdf_files:
-            content = self.download_pdf_file(filename)
-            if content:
-                # Simple relevance check - if question keywords appear in content
-                content_lower = content.lower()
-                
-                # Check for keyword matches
-                question_words = question_lower.split()
-                matches = sum(1 for word in question_words if len(word) > 2 and word in content_lower)
-                
-                if matches > 0:
-                    # Include relevant sections (first 1000 chars to avoid token limits)
-                    preview = content[:1000] + "..." if len(content) > 1000 else content
-                    context_parts.append(f"Από αρχείο {filename}:\n{preview}")
-                    print(f"✅ Found relevant content in {filename}")
-        
-        if context_parts:
-            return "\n\n".join(context_parts)
-        else:
-            print("⚠️ No relevant PDF content found")
-            return ""
-
-    def get_relevant_json_context(self, question: str, max_entries: int = 3) -> str:
-        """Get relevant context from JSON Q&A data"""
-        if not self.qa_data:
-            return ""
-        
-        print(f"🔍 Searching JSON data for context...")
-        
-        # Find top relevant Q&A entries
-        matches = sorted(self.qa_data, 
-                        key=lambda x: self.calculate_similarity(question, x), 
-                        reverse=True)
-        
-        context_parts = []
-        for i, match in enumerate(matches[:max_entries]):
-            similarity = self.calculate_similarity(question, match)
-            print(f"   • JSON context {i+1}: '{match['question']}' (score: {similarity:.3f})")
+        while start < len(text):
+            end = start + chunk_size
             
-            # Include entries with reasonable similarity
-            if similarity > 0.05:  # Lower threshold for context
-                context_parts.append(f"""
-ΕΡΩΤΗΣΗ: {match['question']}
-ΑΠΑΝΤΗΣΗ: {match['answer']}
-ΚΑΤΗΓΟΡΙΑ: {match.get('category', 'Άλλα')}
-""")
+            # Try to break at sentence boundary
+            if end < len(text):
+                # Look for sentence ending within the last 100 characters
+                search_start = max(start + chunk_size - 100, start)
+                sentence_end = -1
+                
+                for delimiter in ['. ', '.\n', '! ', '!\n', '? ', '?\n']:
+                    pos = text.rfind(delimiter, search_start, end)
+                    if pos > sentence_end:
+                        sentence_end = pos + len(delimiter)
+                
+                if sentence_end > start:
+                    end = sentence_end
+            
+            chunk = text[start:end].strip()
+            if chunk:
+                chunks.append(chunk)
+            
+            start = end - overlap
         
-        if context_parts:
-            print(f"✅ Found {len(context_parts)} relevant JSON entries")
-            return "\n" + "="*30 + "\n".join(context_parts)
-        else:
-            print("⚠️ No relevant JSON context found")
-            return ""
+        return chunks
 
-    def get_ai_response_with_pdf(self, user_message: str) -> Tuple[str, bool]:
-        """Get AI response using PDF files + JSON data + general knowledge"""
+    def build_rag_database(self):
+        """Build RAG vector database from Q&A and PDF content"""
+        if not self.rag_initialized:
+            print("⚠️ RAG not initialized, skipping database build")
+            return
+        
+        print("🔄 Building RAG vector database...")
+        
+        self.document_chunks = []
+        all_embeddings = []
+        
+        # Process Q&A data
+        print("📋 Processing Q&A data for RAG...")
+        for qa in self.qa_data:
+            # Create chunks for question and answer separately
+            qa_text = f"Ερώτηση: {qa['question']} Απάντηση: {qa['answer']}"
+            chunks = self.chunk_text(qa_text, chunk_size=400, overlap=50)
+            
+            for i, chunk in enumerate(chunks):
+                chunk_id = f"qa_{qa['id']}_{i}"
+                doc_chunk = DocumentChunk(
+                    id=chunk_id,
+                    content=chunk,
+                    source=f"Q&A Entry {qa['id']}",
+                    chunk_type="qa",
+                    metadata={
+                        "category": qa.get('category', 'Unknown'),
+                        "keywords": qa.get('keywords', []),
+                        "qa_id": qa['id']
+                    }
+                )
+                self.document_chunks.append(doc_chunk)
+        
+        # Process PDF content
+        if PDF_AVAILABLE:
+            print("📄 Processing PDF files for RAG...")
+            for filename in self.pdf_files:
+                content = self.download_pdf_file(filename)
+                if content:
+                    chunks = self.chunk_text(content, chunk_size=600, overlap=100)
+                    
+                    for i, chunk in enumerate(chunks):
+                        chunk_id = f"pdf_{filename}_{i}"
+                        doc_chunk = DocumentChunk(
+                            id=chunk_id,
+                            content=chunk,
+                            source=filename,
+                            chunk_type="pdf",
+                            metadata={
+                                "filename": filename,
+                                "chunk_index": i
+                            }
+                        )
+                        self.document_chunks.append(doc_chunk)
+        
+        print(f"📊 Created {len(self.document_chunks)} document chunks")
+        
+        # Generate embeddings
+        if self.document_chunks:
+            print("🧮 Generating embeddings...")
+            chunk_texts = [chunk.content for chunk in self.document_chunks]
+            
+            try:
+                # Generate embeddings in batches to avoid memory issues
+                batch_size = 32
+                all_embeddings = []
+                
+                for i in range(0, len(chunk_texts), batch_size):
+                    batch = chunk_texts[i:i + batch_size]
+                    batch_embeddings = self.embedder.encode(batch, show_progress_bar=False)
+                    all_embeddings.extend(batch_embeddings)
+                
+                # Create FAISS index
+                embeddings_array = np.array(all_embeddings).astype('float32')
+                
+                # Normalize embeddings for cosine similarity
+                faiss.normalize_L2(embeddings_array)
+                
+                # Use IndexFlatIP for inner product (cosine similarity with normalized vectors)
+                self.faiss_index = faiss.IndexFlatIP(embeddings_array.shape[1])
+                self.faiss_index.add(embeddings_array)
+                
+                print(f"✅ RAG database built successfully with {len(self.document_chunks)} chunks")
+                
+            except Exception as e:
+                print(f"❌ Error building RAG database: {e}")
+                self.faiss_index = None
+        else:
+            print("⚠️ No content available for RAG database")
+
+    def retrieve_relevant_chunks(self, query: str, k: int = 5) -> List[Tuple[DocumentChunk, float]]:
+        """Retrieve most relevant document chunks using RAG"""
+        if not self.rag_initialized or self.faiss_index is None:
+            print("⚠️ RAG not available for retrieval")
+            return []
+        
+        try:
+            # Encode query
+            query_embedding = self.embedder.encode([query])
+            query_embedding = query_embedding.astype('float32')
+            faiss.normalize_L2(query_embedding)
+            
+            # Search for similar chunks
+            scores, indices = self.faiss_index.search(query_embedding, k)
+            
+            relevant_chunks = []
+            for score, idx in zip(scores[0], indices[0]):
+                if idx < len(self.document_chunks):
+                    chunk = self.document_chunks[idx]
+                    relevant_chunks.append((chunk, float(score)))
+            
+            print(f"🔍 Retrieved {len(relevant_chunks)} relevant chunks (scores: {[f'{s:.3f}' for _, s in relevant_chunks]})")
+            return relevant_chunks
+            
+        except Exception as e:
+            print(f"❌ Error in RAG retrieval: {e}")
+            return []
+
+    def get_rag_response(self, user_message: str) -> Tuple[str, bool]:
+        """Get response using RAG (Retrieval-Augmented Generation)"""
         if not self.groq_client:
             return "", False
         
+        print(f"🤖 Processing with RAG: '{user_message}'")
+        
         try:
-            # Get PDF context from official documents
-            pdf_context = self.search_pdf_files(user_message)
+            # Retrieve relevant chunks
+            relevant_chunks = self.retrieve_relevant_chunks(user_message, k=8)
             
-            # Get relevant JSON context
-            json_context = self.get_relevant_json_context(user_message)
+            if not relevant_chunks:
+                print("⚠️ No relevant chunks found, falling back to general knowledge")
+                return self.get_fallback_ai_response(user_message)
             
-            # Build comprehensive context
+            # Build context from retrieved chunks
             context_parts = []
             
-            if pdf_context:
-                context_parts.append(f"ΕΠΙΣΗΜΑ ΕΓΓΡΑΦΑ ΜΗΤΡΟΠΟΛΙΤΙΚΟΥ ΚΟΛΛΕΓΙΟΥ:\n{pdf_context}")
+            # Separate PDF and Q&A content
+            pdf_chunks = [(chunk, score) for chunk, score in relevant_chunks if chunk.chunk_type == "pdf"]
+            qa_chunks = [(chunk, score) for chunk, score in relevant_chunks if chunk.chunk_type == "qa"]
             
-            if json_context:
-                context_parts.append(f"ΒΑΣΗ ΓΝΩΣΗΣ Q&A:\n{json_context}")
+            # Add PDF context (official documents)
+            if pdf_chunks:
+                pdf_context = "\n\n".join([
+                    f"[Επίσημο έγγραφο: {chunk.source}]\n{chunk.content}"
+                    for chunk, score in pdf_chunks[:4]  # Top 4 PDF chunks
+                ])
+                context_parts.append(f"ΕΠΙΣΗΜΑ ΕΓΓΡΑΦΑ ΚΟΛΛΕΓΙΟΥ:\n{pdf_context}")
             
-            # Enhanced prompt that combines all sources
-            if context_parts:
-                combined_context = "\n\n" + ("="*50 + "\n\n").join(context_parts)
-                
-                full_prompt = f"""Έχεις πρόσβαση στις παρακάτω πληροφορίες:
-
+            # Add Q&A context
+            if qa_chunks:
+                qa_context = "\n\n".join([
+                    f"[Κατηγορία: {chunk.metadata.get('category', 'Άλλα')}]\n{chunk.content}"
+                    for chunk, score in qa_chunks[:4]  # Top 4 Q&A chunks
+                ])
+                context_parts.append(f"ΒΑΣΗ ΓΝΩΣΗΣ Q&A:\n{qa_context}")
+            
+            # Build comprehensive prompt
+            combined_context = "\n\n" + ("="*50 + "\n\n").join(context_parts)
+            
+            full_prompt = f"""ΑΝΑΚΤΗΜΕΝΟ ΠΕΡΙΕΧΟΜΕΝΟ ΑΠΟ ΣΥΣΤΗΜΑ RAG:
 {combined_context}
 
-Ερώτηση φοιτητή: {user_message}
+ΕΡΩΤΗΣΗ ΦΟΙΤΗΤΗ: {user_message}
 
-ΟΔΗΓΙΕΣ:
-1. Χρησιμοποίησε πληροφορίες από ΕΠΙΣΗΜΑ ΕΓΓΡΑΦΑ (υψηλή προτεραιότητα)
-2. Συμπλήρωσε με πληροφορίες από τη ΒΑΣΗ ΓΝΩΣΗΣ Q&A
-3. Συνδύασε με τη γενική σου γνώση για πρακτική άσκηση
-4. Δώσε πλήρη, ακριβή και χρήσιμη απάντηση
-5. Αν υπάρχουν αντικρουόμενες πληροφορίες, προτίμησε τα επίσημα έγγραφα
-6. Αναφέρου ότι οι πληροφορίες βασίζονται σε επίσημες πηγές του κολλεγίου"""
-            else:
-                # No relevant context found - use general knowledge with college info
-                full_prompt = f"""Ερώτηση φοιτητή για πρακτική άσκηση: {user_message}
+ΟΔΗΓΙΕΣ RAG:
+1. Αναλύσε το ανακτημένο περιεχόμενο για σχετικότητα με την ερώτηση
+2. Χρησιμοποίησε πληροφορίες από ΕΠΙΣΗΜΑ ΕΓΓΡΑΦΑ ως κύρια πηγή
+3. Συμπλήρωσε με πληροφορίες από τη ΒΑΣΗ ΓΝΩΣΗΣ Q&A
+4. Συνδύασε τις πληροφορίες για να δώσεις μια ολοκληρωμένη απάντηση
+5. Εστίασε στις πρακτικές συμβουλές και συγκεκριμένα βήματα
+6. Αν χρειάζεται επιβεβαίωση, αναφέρου τον υπεύθυνο
 
-CONTEXT: Φοιτητής στο τμήμα Προπονητικής & Φυσικής Αγωγής, Μητροπολιτικό Κολλέγιο Θεσσαλονίκης
+ΣΤΡΑΤΗΓΙΚΗ ΑΠΑΝΤΗΣΗΣ:
+- Δώσε άμεση και χρήσιμη απάντηση βασισμένη στο ανακτημένο περιεχόμενο
+- Χρησιμοποίησε δομημένη παρουσίαση με σαφή βήματα
+- Συμπεριέλαβε συγκεκριμένες οδηγίες και πρακτικές συμβουλές
+- Αναφέρου σχετικές προθεσμίες ή απαιτήσεις
 
-ΒΑΣΙΚΕΣ ΠΛΗΡΟΦΟΡΙΕΣ:
-- Απαιτούνται 240 ώρες πρακτικής άσκησης
-- Προθεσμία: 30 Μαΐου  
-- Υπεύθυνος: Γεώργιος Σοφιανίδης (gsofianidis@mitropolitiko.edu.gr)
-- Ωράριο: Δευτέρα-Σάββατο, μέχρι 8 ώρες/ημέρα
-
-Απάντησε με βάση τη γενική σου γνώση για πρακτική άσκηση στην Ελλάδα.
-Δώσε πρακτικές, χρήσιμες συμβουλές και πρότεινε να επικοινωνήσει με τον υπεύθυνο για επιβεβαίωση."""
+Απάντησε στα ελληνικά με επαγγελματικό τόνο."""
 
             # Call Groq API
             chat_completion = self.groq_client.chat.completions.create(
@@ -402,279 +517,182 @@ CONTEXT: Φοιτητής στο τμήμα Προπονητικής & Φυσι�
                     {"role": "user", "content": full_prompt}
                 ],
                 model="llama-3.1-8b-instant",
-                temperature=0.2,  # Balanced for accuracy + natural responses
-                max_tokens=1000,  # Increased for comprehensive answers
+                temperature=0.2,  # Lower temperature for more focused responses
+                max_tokens=1200,
                 top_p=0.9,
                 stream=False
             )
 
             response = chat_completion.choices[0].message.content
             
-            # Έλεγχος για μη-ελληνικούς χαρακτήρες
+            # Validate Greek characters
             if response and any(ord(char) > 1500 and ord(char) not in range(0x0370, 0x03FF) for char in response):
-                print("⚠️ Detected non-Greek characters in response, using fallback")
+                print("⚠️ Detected non-Greek characters in RAG response")
                 return "", False
             
+            print("✅ RAG response generated successfully")
             return response, True
             
         except Exception as e:
-            print(f"❌ PDF+JSON AI Error: {e}")
+            print(f"❌ RAG Error: {e}")
             return "", False
 
-    def get_general_ai_response(self, user_message: str) -> Tuple[str, bool]:
-        """Get general AI response using LLM's own knowledge"""
+    def get_fallback_ai_response(self, user_message: str) -> Tuple[str, bool]:
+        """Fallback AI response when RAG is not available"""
         if not self.groq_client:
             return "", False
         
         try:
-            # Enhanced general prompt that includes specific context for common questions
-            general_prompt = f"""Ερώτηση φοιτητή για πρακτική άσκηση: {user_message}
+            fallback_prompt = f"""ΕΡΩΤΗΣΗ ΦΟΙΤΗΤΗ: {user_message}
 
-Είσαι σύμβουλος για πρακτική άσκηση στο τμήμα Προπονητικής & Φυσικής Αγωγής.
+ΠΛΑΙΣΙΟ: Φοιτητής Προπονητικής & Φυσικής Αγωγής, Μητροπολιτικό Κολλέγιο Θεσσαλονίκης
 
-ΣΗΜΑΝΤΙΚΕΣ ΠΛΗΡΟΦΟΡΙΕΣ:
-- Απαιτούνται 240 ώρες πρακτικής άσκησης
-- Μπορεί να γίνει σε αθλητικούς συλλόγους, γυμναστήρια, ακαδημίες αθλητισμού
+ΒΑΣΙΚΕΣ ΠΛΗΡΟΦΟΡΙΕΣ:
+- Απαιτούνται 240 ώρες πρακτικής άσκησης μέχρι 30 Μαΐου
+- Δευτέρα-Σάββατο, μέχρι 8 ώρες/ημέρα  
 - Υπεύθυνος: Γεώργιος Σοφιανίδης (gsofianidis@mitropolitiko.edu.gr)
-- Προθεσμία: 30 Μαΐου
+- Παράδοση συμβάσεων στο Moodle μέχρι 15 Οκτωβρίου
 
-Δώσε μια χρήσιμη απάντηση στα ελληνικά με βάση αυτές τις πληροφορίες και τη γενική γνώση.
-Αν δεν είσαι σίγουρος, πες ότι χρειάζεται επιβεβαίωση από τον υπεύθυνο."""
+ΟΔΗΓΙΕΣ:
+1. Χρησιμοποίησε τη γενική σου γνώση για πρακτική άσκηση στην Ελλάδα
+2. Συσχέτισε με το συγκεκριμένο πλαίσιο του κολλεγίου
+3. Δώσε πρακτικές και χρήσιμες συμβουλές
+4. Πρότεινε επικοινωνία με τον υπεύθυνο για επιβεβαίωση
 
-            # Call Groq API
+Απάντησε με επαγγελματικό τόνο στα ελληνικά."""
+
             chat_completion = self.groq_client.chat.completions.create(
                 messages=[
                     {"role": "system", "content": self.system_prompt},
-                    {"role": "user", "content": general_prompt}
+                    {"role": "user", "content": fallback_prompt}
                 ],
                 model="llama-3.1-8b-instant",
                 temperature=0.3,
-                max_tokens=600,
+                max_tokens=800,
                 top_p=0.9,
                 stream=False
             )
 
             response = chat_completion.choices[0].message.content
             
-            # Έλεγχος για μη-ελληνικούς χαρακτήρες
             if response and any(ord(char) > 1500 and ord(char) not in range(0x0370, 0x03FF) for char in response):
-                print("⚠️ Detected non-Greek characters in general AI response")
+                print("⚠️ Detected non-Greek characters in fallback response")
                 return "", False
             
             return response, True
             
         except Exception as e:
-            print(f"❌ General AI Error: {e}")
+            print(f"❌ Fallback AI Error: {e}")
             return "", False
 
-    def normalize_question(self, question: str) -> str:
-        """Normalize question for better matching"""
-        # Convert to lowercase
-        normalized = question.lower()
-        
-        # Common term replacements for better matching
-        replacements = {
-            "ενόργανη": "ενόργανη γυμναστική",
-            "γυμναστικη": "γυμναστική",
-            "πρακτικη": "πρακτική",
-            "ασκηση": "άσκηση",
-            "συλλογο": "σύλλογο",
-            "συλλογος": "σύλλογος",
-            "δομη": "δομή",
-            "φορεα": "φορέα",
-            "γυμναστηριο": "γυμναστήριο",
-            "μπορω": "μπορώ",
-            "θελω": "θέλω"
-        }
-        
-        for old_term, new_term in replacements.items():
-            normalized = normalized.replace(old_term, new_term)
-        
-        return normalized
-    def calculate_similarity(self, question: str, qa_entry: Dict) -> float:
-        """Calculate similarity between question and QA entry with improved matching"""
-        # Normalize the question first
-        question_normalized = self.normalize_question(question)
-        question_lower = question_normalized.lower()
-        
-        # Check if any keyword matches
-        keyword_matches = sum(1 for keyword in qa_entry.get('keywords', []) 
-                            if keyword.lower() in question_lower)
-        
-        # Check title similarity (both directions)
-        title_words = qa_entry['question'].lower().split()
-        title_matches = sum(1 for word in title_words if word in question_lower and len(word) > 2)
-        
-        # Check question words in title
-        question_words = [w for w in question_lower.split() if len(w) > 2]
-        reverse_matches = sum(1 for word in question_words if word in qa_entry['question'].lower())
-        
-        # Check answer content for additional context
-        answer_words = qa_entry.get('answer', '').lower().split()
-        answer_matches = sum(1 for word in question_words if word in answer_words and len(word) > 3)
-        
-        # Enhanced scoring with better normalization
-        if keyword_matches > 0:
-            keyword_score = keyword_matches / max(len(qa_entry.get('keywords', [])), 1) * 3
-        else:
-            keyword_score = 0
-            
-        title_score = (title_matches + reverse_matches) / max(len(title_words) + len(question_words), 1) * 2
-        answer_score = answer_matches / max(len(question_words), 1) * 0.5
-        
-        total_score = keyword_score + title_score + answer_score
-        return min(total_score, 1.0)
-
     def get_smart_fallback_response(self, question: str) -> str:
-        """Smart fallback for specific types of questions"""
-        question_lower = self.normalize_question(question).lower()
+        """Smart fallback response when AI is not available"""
+        question_lower = question.lower()
         
-        # Check for questions about specific types of facilities/clubs
-        facility_keywords = ["σύλλογο", "σύλλογος", "γυμναστήριο", "ενόργανη", "ποδόσφαιρο", 
-                           "μπάσκετ", "κολυμβητήριο", "ακαδημία", "fitness", "personal"]
-        
-        if any(keyword in question_lower for keyword in facility_keywords):
-            return """Ναι, μπορείτε να κάνετε πρακτική άσκηση σε:
+        # Enhanced concept-based responses
+        if any(keyword in question_lower for keyword in ['σύλλογο', 'σύλλογος', 'γυμναστήριο', 'δομή', 'φορέα']):
+            return """ΔΟΜΕΣ ΠΡΑΚΤΙΚΗΣ ΑΣΚΗΣΗΣ:
 
-• Αθλητικούς συλλόγους όλων των αθλημάτων (ενόργανη γυμναστική, ποδόσφαιρο, μπάσκετ, βόλεϊ, κλπ)
+• Αθλητικούς συλλόγους όλων των αθλημάτων
 • Γυμναστήρια και fitness centers
-• Κολυμβητήρια
+• Κολυμβητήρια  
 • Ακαδημίες αθλητισμού
 • Personal training studios
 • Κέντρα αποκατάστασης
+• Σχολεία με τμήμα φυσικής αγωγής
 
 ΠΡΟΫΠΟΘΕΣΕΙΣ:
-• Η δομή πρέπει να έχει νόμιμη λειτουργία και ΑΦΜ
-• Πρέπει να υπάρχει εκπαιδευτής/υπεύθυνος με τα κατάλληλα προσόντα
-• Η δομή πρέπει να μπορεί να σας καθοδηγήσει στην πρακτική
+• Νόμιμη λειτουργία και ΑΦΜ
+• Εκπαιδευτής με κατάλληλα προσόντα  
+• Δυνατότητα καθοδήγησης
 
-Για περισσότερες λεπτομέρειες και έγκριση της συγκεκριμένης δομής:
-📧 gsofianidis@mitropolitiko.edu.gr"""
+Για έγκριση δομής: gsofianidis@mitropolitiko.edu.gr"""
 
-        # Check for document/process questions
-        process_keywords = ["έγγραφα", "χαρτιά", "διαδικασία", "βήματα", "αίτηση"]
-        if any(keyword in question_lower for keyword in process_keywords):
-            # Return document-related response from existing data
-            for qa in self.qa_data:
-                if qa.get('category') == 'Έγγραφα & Διαδικασίες':
-                    return qa['answer']
-        
-        # Default response
-        return f"""Δεν βρέθηκε συγκεκριμένη απάντηση για αυτή την ερώτηση.
+        elif any(keyword in question_lower for keyword in ['έγγραφα', 'χαρτιά', 'διαδικασία', 'αίτηση']):
+            return """ΑΠΑΙΤΟΥΜΕΝΑ ΕΓΓΡΑΦΑ:
 
-Προτεινόμενες ενέργειες:
-• Αναδιατυπώστε την ερώτηση
-• Επιλέξτε από τις συχνές ερωτήσεις στο αριστερό μενού
-• Επικοινωνήστε με τον Γεώργιο Σοφιανίδη: gsofianidis@mitropolitiko.edu.gr"""
-        """Get response from Groq AI with context"""
-        if not self.groq_client:
-            return "", False
-        
-        try:
-            # Prepare the full prompt with context
-            full_prompt = f"""Context πληροφοριών:
-{context}
+ΓΙΑ ΤΟΝ ΦΟΙΤΗΤΗ:
+• Αίτηση πραγματοποίησης πρακτικής άσκησης
+• Στοιχεία φοιτητή (συμπληρωμένη φόρμα)
+• Ασφαλιστική ικανότητα από gov.gr
+• Υπεύθυνη δήλωση (μη λήψη επιδόματος)
 
-Ερώτηση φοιτητή: {user_message}
+ΓΙΑ ΤΗ ΔΟΜΗ:
+• Στοιχεία φορέα (ΑΦΜ, διεύθυνση, εκπρόσωπος)
+• Ημέρες και ώρες δεκτότητας
 
-Χρησιμοποίησε ΜΟΝΟ τις πληροφορίες από το context για να απαντήσεις."""
+⚠️ ΣΗΜΑΝΤΙΚΟ: Ξεκινήστε από την ασφαλιστική ικανότητα!
 
-            # Call Groq API
-            chat_completion = self.groq_client.chat.completions.create(
-                messages=[
-                    {"role": "system", "content": self.system_prompt},
-                    {"role": "user", "content": full_prompt}
-                ],
-                model="llama-3.1-8b-instant",
-                temperature=0.1,  # Χαμηλότερο για πιο συνεπείς απαντήσεις
-                max_tokens=800,
-                top_p=0.9,        # Πιο συντηρητικό για σταθερότητα
-                stream=False
-            )
+Επικοινωνία: gsofianidis@mitropolitiko.edu.gr"""
 
-            response = chat_completion.choices[0].message.content
-            
-            # Έλεγχος για μη-ελληνικούς χαρακτήρες
-            if response and any(ord(char) > 1500 and ord(char) not in range(0x0370, 0x03FF) for char in response):
-                print("⚠️ Detected non-Greek characters in response, using fallback")
-                return "", False
-            
-            return response, True
-            
-        except Exception as e:
-            print(f"❌ Groq API Error: {e}")
-            return "", False
+        elif any(keyword in question_lower for keyword in ['ώρες', 'χρόνος', 'προθεσμία', '240']):
+            return """ΧΡΟΝΟΔΙΑΓΡΑΜΜΑ:
 
-    def get_fallback_response(self, question: str) -> Tuple[str, bool]:
-        """Fallback response system - returns (response, found_exact_match)"""
-        if not self.qa_data:
-            return "Δεν υπάρχουν διαθέσιμα δεδομένα. Επικοινωνήστε με τον Γεώργιο Σοφιανίδη: gsofianidis@mitropolitiko.edu.gr", False
+Απαιτούμενες ώρες: 240 ώρες
+Προθεσμία: 30 Μαΐου
 
-        # Find best match
-        best_match = max(self.qa_data, key=lambda x: self.calculate_similarity(question, x))
-        similarity = self.calculate_similarity(question, best_match)
-        
-        # Debug information
-        print(f"🔍 Question: '{question}'")
-        print(f"🎯 Best match: '{best_match['question']}'")
-        print(f"📊 Similarity score: {similarity:.3f}")
+ΚΑΝΟΝΕΣ ΩΡΑΡΙΟΥ:
+• Δευτέρα-Σάββατο (όχι Κυριακές)
+• Μέχρι 8 ώρες/ημέρα
+• 5 ημέρες/εβδομάδα
 
-        # Lower threshold for better matching
-        if similarity > 0.15:  # Reduced from 0.2 to 0.15
-            print(f"✅ Match found with score {similarity:.3f}")
-            return best_match['answer'], True
+ΠΑΡΑΔΕΙΓΜΑΤΑ:
+• 6 εβδομάδες × 40 ώρες
+• 8 εβδομάδες × 30 ώρες  
+
+Για προσαρμογή: gsofianidis@mitropolitiko.edu.gr"""
+
         else:
-            print(f"❌ No good match found (best score: {similarity:.3f})")
-            # Use smart fallback instead of generic response
-            smart_response = self.get_smart_fallback_response(question)
-            return smart_response, False
+            return f"""Δεν βρέθηκε συγκεκριμένη απάντηση.
+
+ΠΡΟΤΕΙΝΟΜΕΝΕΣ ΕΝΕΡΓΕΙΕΣ:
+• Διατυπώστε την ερώτηση πιο συγκεκριμένα
+• Επιλέξτε από τις συχνές ερωτήσεις
+• Επικοινωνήστε με τον υπεύθυνο
+
+ΕΠΙΚΟΙΝΩΝΙΑ:
+📧 gsofianidis@mitropolitiko.edu.gr
+📞 2314 409000
+
+Για άμεση βοήθεια, περιγράψτε τη συγκεκριμένη απορία."""
 
     def get_response(self, question: str) -> str:
-        """Get chatbot response - JSON FIRST, then PDF AI (PRIORITY), then JSON fallback"""
+        """Main response method using RAG-first approach"""
         if not self.qa_data:
             return "Δεν υπάρχουν διαθέσιμα δεδομένα γνώσης."
         
-        print(f"\n🤖 Processing question: '{question}'")
+        print(f"\n🤖 Processing question with RAG: '{question}'")
         
-        # Step 1: Try JSON for exact matches FIRST
-        print("📋 Step 1: Checking JSON for exact matches...")
-        json_response, found_exact_match = self.get_fallback_response(question)
-        
-        if found_exact_match:
-            print("✅ Found exact match in JSON data")
-            return json_response
-        
-        # Step 2: PDF+JSON AI search (PRIORITY) - Comprehensive approach!
-        print("📄 Step 2: PDF+JSON AI search - combining all sources...")
-        
-        if self.groq_client and PDF_AVAILABLE:
-            pdf_response, success = self.get_ai_response_with_pdf(question)
-            if success and pdf_response.strip():
-                print("✅ PDF+JSON AI response successful - used comprehensive context")
-                return pdf_response
+        # RAG-first approach
+        if self.rag_initialized and self.faiss_index is not None:
+            print("🧠 Step 1: RAG semantic search...")
+            response, success = self.get_rag_response(question)
+            if success and response.strip():
+                print("✅ RAG response successful")
+                return response
             else:
-                print("⚠️ PDF+JSON AI search failed or no relevant content found")
+                print("⚠️ RAG failed, trying fallback AI...")
         else:
-            print("⚠️ PDF+JSON AI not available (missing Groq client or PDF library)")
+            print("⚠️ RAG not available, using fallback AI...")
         
-        # Step 3: JSON fallback (if PDFs have nothing useful)
-        print("📋 Step 3: Using JSON fallback response...")
-        return json_response
-
-def initialize_qa_file():
-    """Create initial qa_data.json if it doesn't exist (fallback for development)"""
-    if not os.path.exists("qa_data.json"):
-        print("📄 qa_data.json not found. Please create it with the full 39 entries.")
-        print("💡 Place the complete JSON file in the same directory as this script.")
-        return False
-    return True
+        # Fallback to AI without RAG
+        if self.groq_client:
+            response, success = self.get_fallback_ai_response(question)
+            if success and response.strip():
+                print("✅ Fallback AI response successful")
+                return response
+        
+        # Final fallback to smart responses
+        print("📋 Using smart fallback response...")
+        return self.get_smart_fallback_response(question)
 
 def main():
-    """Main Streamlit application - Git-first content management"""
+    """Main Streamlit application with RAG-powered intelligence"""
     
-    # CSS Styling
+    # Enhanced Responsive CSS Styling
     st.markdown("""
     <style>
+    /* Base responsive styles */
     .main-header {
         background: linear-gradient(90deg, #1f4e79 0%, #2980b9 100%);
         color: white;
@@ -687,24 +705,19 @@ def main():
         align-items: center;
         justify-content: center;
         gap: 2rem;
+        flex-wrap: wrap;
     }
     
     .header-content {
         flex: 1;
+        min-width: 300px;
     }
     
     .header-logo {
         max-height: 80px;
         max-width: 120px;
         object-fit: contain;
-    }
-    
-    .logo-container {
-        display: flex;
-        align-items: center;
-        margin-bottom: 2rem;
-        padding: 1rem 0;
-        border-bottom: 1px solid #e8f4f8;
+        flex-shrink: 0;
     }
     
     .user-message {
@@ -715,6 +728,8 @@ def main():
         border-radius: 8px;
         margin: 1rem 0;
         color: #333;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
     }
     
     .ai-message {
@@ -726,6 +741,8 @@ def main():
         border-radius: 8px;
         margin: 1rem 0;
         box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        word-wrap: break-word;
+        overflow-wrap: break-word;
     }
     
     .ai-message a {
@@ -747,6 +764,10 @@ def main():
         margin: 0.5rem;
         box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         transition: transform 0.2s ease, box-shadow 0.2s ease;
+        min-height: 120px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
     }
     
     .info-card:hover {
@@ -767,26 +788,20 @@ def main():
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     
-    .quick-stats {
-        display: flex;
-        justify-content: space-around;
-        margin: 2rem 0;
-        gap: 1rem;
+    .rag-status {
+        background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+        animation: gradientShift 3s ease-in-out infinite;
     }
     
-    .stat-item {
-        text-align: center;
-        background: white;
-        padding: 1rem;
-        border-radius: 8px;
-        border: 1px solid #e8f4f8;
-        flex: 1;
+    @keyframes gradientShift {
+        0%, 100% { background: linear-gradient(45deg, #ff6b6b, #4ecdc4); }
+        50% { background: linear-gradient(45deg, #4ecdc4, #45b7d1); }
     }
     
     .chat-container {
         background: white;
         border-radius: 10px;
-        padding: 2rem;
+        padding: 1rem;
         margin-top: 2rem;
         box-shadow: 0 2px 10px rgba(0,0,0,0.05);
         border: 1px solid #e8f4f8;
@@ -796,6 +811,7 @@ def main():
         border-radius: 20px;
         border: 2px solid #e8f4f8;
         padding: 0.8rem 1.2rem;
+        font-size: 16px;
     }
     
     .stButton > button {
@@ -806,11 +822,137 @@ def main():
         padding: 0.6rem 2rem;
         font-weight: 600;
         transition: all 0.3s ease;
+        width: 100%;
+        min-height: 44px;
     }
     
     .stButton > button:hover {
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(31, 78, 121, 0.3);
+    }
+    
+    /* Responsive breakpoints */
+    @media screen and (max-width: 768px) {
+        .main-header {
+            padding: 1rem;
+            gap: 1rem;
+            flex-direction: column;
+            text-align: center;
+        }
+        
+        .header-content h1 {
+            font-size: 1.5rem !important;
+            margin-bottom: 0.5rem;
+        }
+        
+        .header-content h3 {
+            font-size: 1rem !important;
+            margin-bottom: 0.5rem;
+        }
+        
+        .header-content p {
+            font-size: 0.9rem !important;
+        }
+        
+        .header-logo {
+            max-height: 60px;
+            max-width: 100px;
+        }
+        
+        .info-card {
+            margin: 0.25rem;
+            padding: 1rem;
+            min-height: auto;
+        }
+        
+        .info-card h4 {
+            font-size: 1rem !important;
+        }
+        
+        .info-card p {
+            font-size: 1rem !important;
+        }
+        
+        .info-card small {
+            font-size: 0.8rem !important;
+        }
+        
+        .chat-container {
+            padding: 0.5rem;
+            margin-left: -1rem;
+            margin-right: -1rem;
+            border-radius: 0;
+        }
+        
+        .user-message, .ai-message {
+            padding: 0.75rem;
+            font-size: 0.9rem;
+        }
+        
+        .api-status {
+            position: relative;
+            top: auto;
+            right: auto;
+            margin: 1rem 0;
+            display: inline-block;
+            font-size: 0.8rem;
+        }
+    }
+    
+    @media screen and (max-width: 480px) {
+        .main-header {
+            padding: 0.75rem;
+        }
+        
+        .header-content h1 {
+            font-size: 1.25rem !important;
+        }
+        
+        .header-content h3 {
+            font-size: 0.9rem !important;
+        }
+        
+        .info-card {
+            padding: 0.75rem;
+        }
+        
+        .info-card h4 {
+            font-size: 0.9rem !important;
+            margin-bottom: 0.25rem !important;
+        }
+        
+        .info-card p {
+            font-size: 0.9rem !important;
+            margin: 0.25rem 0 !important;
+        }
+        
+        .user-message, .ai-message {
+            padding: 0.5rem;
+            font-size: 0.85rem;
+            margin: 0.5rem 0;
+        }
+        
+        .stButton > button {
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+        }
+    }
+    
+    /* Hide scrollbars but keep functionality */
+    .stApp {
+        overflow-x: hidden;
+    }
+    
+    /* Ensure content doesn't break on very small screens */
+    * {
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+    
+    /* Better text scaling */
+    html {
+        -webkit-text-size-adjust: 100%;
+        -ms-text-size-adjust: 100%;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -824,7 +966,7 @@ def main():
         <div class="header-content">
             <h1>Πρακτική Άσκηση</h1>
             <h3>Μητροπολιτικό Κολλέγιο - Τμήμα Προπονητικής & Φυσικής Αγωγής</h3>
-            <p><em>Εξειδικευμένος AI Assistant για υποστήριξη φοιτητών</em></p>
+            <p><em>🧠 RAG-Powered AI Assistant με Σημασιολογική Αναζήτηση</em></p>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -834,26 +976,32 @@ def main():
         st.session_state.messages = []
 
     if 'chatbot' not in st.session_state:
-        # Get Groq API key from secrets or environment
+        # Get Groq API key
         groq_api_key = None
         try:
             groq_api_key = st.secrets.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY")
         except:
             pass
-        st.session_state.chatbot = InternshipChatbot(groq_api_key)
+        
+        with st.spinner("🔄 Initializing RAG system..."):
+            st.session_state.chatbot = RAGInternshipChatbot(groq_api_key)
     else:
-        # Refresh data if cache was cleared
+        # Refresh data if needed
         current_data_count = len(st.session_state.chatbot.qa_data)
         st.session_state.chatbot.qa_data = st.session_state.chatbot.load_qa_data()
         new_data_count = len(st.session_state.chatbot.qa_data)
         
         if new_data_count != current_data_count:
-            st.toast(f"📊 Δεδομένα ενημερώθηκαν: {new_data_count} ερωτήσεις")
+            st.toast(f"📊 Data updated: {new_data_count} entries")
+            # Rebuild RAG database if needed
+            if st.session_state.chatbot.rag_initialized:
+                with st.spinner("🔄 Rebuilding RAG database..."):
+                    st.session_state.chatbot.build_rag_database()
 
     # Quick info cards
     st.markdown("### 📊 Σημαντικές Πληροφορίες")
     
-    quick_col1, quick_col2, quick_col3 = st.columns(3)
+    quick_col1, quick_col2, quick_col3 = st.columns([1, 1, 1])
     
     with quick_col1:
         st.markdown("""
@@ -882,19 +1030,27 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
-    # API Status
-    if st.session_state.chatbot.groq_client:
-        if PDF_AVAILABLE:
-            st.markdown(f'<div class="api-status">📄 PDF+JSON ({PDF_METHOD})</div>', unsafe_allow_html=True)
-        else:
-            st.markdown('<div class="api-status">📋 JSON First Mode</div>', unsafe_allow_html=True)
-        
-    # Επαγγελματική ενδειξη για sidebar
-    status_text = "JSON → PDF+JSON AI → JSON Fallback" if PDF_AVAILABLE else "JSON → AI → Fallback"
+    # RAG Status Indicator
+    if st.session_state.chatbot.rag_initialized and st.session_state.chatbot.faiss_index is not None:
+        chunks_count = len(st.session_state.chatbot.document_chunks)
+        st.markdown(f'<div class="api-status rag-status">🧠 RAG Active ({chunks_count} chunks)</div>', unsafe_allow_html=True)
+    elif st.session_state.chatbot.groq_client:
+        st.markdown('<div class="api-status">🤖 AI Mode</div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="api-status" style="background: #ffc107;">📋 Basic Mode</div>', unsafe_allow_html=True)
+
+    # Enhanced status information
+    if st.session_state.chatbot.rag_initialized:
+        status_text = f"RAG Semantic Search → AI Generation → Smart Fallback ({len(st.session_state.chatbot.document_chunks)} chunks)"
+    elif st.session_state.chatbot.groq_client:
+        status_text = "AI Generation → Smart Fallback"
+    else:
+        status_text = "Smart Concept-Based Responses"
+    
     st.markdown(f"""
     <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.6rem; margin-bottom: 1.5rem; text-align: center; font-size: 0.9rem;">
-        <strong>Πληροφορίες:</strong> Χρησιμοποιήστε το αριστερό μενού για συχνές ερωτήσεις και επικοινωνία 👈<br>
-        <small>🔄 Προτεραιότητα: {status_text}</small>
+        <strong>🧠 RAG-Powered Assistant:</strong> Χρησιμοποιεί σημασιολογική αναζήτηση για βαθύτερη κατανόηση<br>
+        <small>🔄 Architecture: {status_text}</small>
     </div>
     """, unsafe_allow_html=True)
 
@@ -906,7 +1062,7 @@ def main():
         **Υπεύθυνος Πρακτικής Άσκησης**  
         **Γεώργιος Σοφιανίδης**  
         **📞 2314409000**
-       ** 📧 gsofianidis@mitropolitiko.edu.gr**
+        **📧 gsofianidis@mitropolitiko.edu.gr**
         
         **Σχεδιασμός/Ανάπτυξη/Τεχνική Υποστήριξη**  
         **Γεώργιος Μπουχουράς**  
@@ -917,10 +1073,9 @@ def main():
 
         st.markdown("---")
 
-        # Συχνές ερωτήσεις
+        # Frequent questions
         st.markdown("## 🔄 Συχνές Ερωτήσεις")
         
-        # Group questions by category
         categories = {}
         for qa in st.session_state.chatbot.qa_data:
             cat = qa.get('category', 'Άλλα')
@@ -929,30 +1084,35 @@ def main():
             categories[cat].append(qa)
 
         for category, questions in categories.items():
-            if st.expander(f"📂 {category}"):
+            with st.expander(f"📂 {category}"):
                 for qa in questions:
                     if st.button(qa['question'], key=f"faq_{qa['id']}", use_container_width=True):
-                        # Add to chat
                         st.session_state.messages.append({"role": "user", "content": qa['question']})
                         st.session_state.messages.append({"role": "assistant", "content": qa['answer']})
                         st.rerun()
 
         st.markdown("---")
 
-        # AI Status
-        if st.session_state.chatbot.groq_client:
-            if PDF_AVAILABLE:
-                st.success(f"📄 PDF+JSON Mode ({PDF_METHOD})")
-                st.info("AI συνδυάζει επίσημα έγγραφα + JSON βάση γνώσης")
+        # Enhanced RAG Status
+        if st.session_state.chatbot.rag_initialized:
+            if st.session_state.chatbot.faiss_index is not None:
+                st.success("🧠 RAG System Active")
+                chunks = len(st.session_state.chatbot.document_chunks)
+                st.info(f"Semantic search across {chunks} document chunks")
+                
+                # RAG Statistics
+                qa_chunks = sum(1 for chunk in st.session_state.chatbot.document_chunks if chunk.chunk_type == "qa")
+                pdf_chunks = sum(1 for chunk in st.session_state.chatbot.document_chunks if chunk.chunk_type == "pdf")
+                st.write(f"📋 Q&A chunks: {qa_chunks}")
+                st.write(f"📄 PDF chunks: {pdf_chunks}")
             else:
-                st.success("📋 JSON First Mode")
-                st.warning("PDF search απενεργοποιημένο")
+                st.warning("🧠 RAG Initialized but Database Missing")
         else:
-            st.warning("📚 JSON Only Mode")
-            if GROQ_AVAILABLE:
-                st.info("Για PDF+JSON AI, χρειάζεται Groq API key")
+            if RAG_AVAILABLE:
+                st.warning("🧠 RAG Libraries Available but Not Initialized")
             else:
-                st.error("Groq library δεν είναι διαθέσιμη")
+                st.error("⚠️ RAG Libraries Not Available")
+                st.info("Install: pip install sentence-transformers faiss-cpu")
 
         st.markdown("---")
 
@@ -961,97 +1121,55 @@ def main():
             st.rerun()
 
         # Enhanced Technical Information
-        if st.checkbox("🔧 Τεχνικές Πληροφορίες"):
-            st.markdown("**Για τεχνικά προβλήματα:**")
+        with st.expander("🔧 RAG System Details"):
+            st.markdown("**For technical issues:**")
             st.markdown("📧 gbouchouras@mitropolitiko.edu.gr")
             
-            # Enhanced debugging info
-            st.write("**System Status:**")
-            st.write("• Response Priority: JSON → PDF+JSON AI → JSON Fallback")
+            st.write("**RAG System Status:**")
+            st.write("• RAG Libraries:", RAG_AVAILABLE)
+            st.write("• RAG Initialized:", st.session_state.chatbot.rag_initialized)
+            st.write("• Vector Database:", st.session_state.chatbot.faiss_index is not None)
+            st.write("• Embedding Model:", "paraphrase-multilingual-MiniLM-L12-v2" if st.session_state.chatbot.rag_initialized else "None")
             st.write("• Groq Available:", GROQ_AVAILABLE)
             st.write("• Groq Client:", st.session_state.chatbot.groq_client is not None)
             st.write("• PDF Available:", PDF_AVAILABLE)
-            if PDF_AVAILABLE:
-                st.write("• PDF Method:", PDF_METHOD)
+            
+            if st.session_state.chatbot.rag_initialized:
+                st.write("**Document Chunks:**")
+                st.write(f"• Total chunks: {len(st.session_state.chatbot.document_chunks)}")
+                
+                chunk_types = {}
+                for chunk in st.session_state.chatbot.document_chunks:
+                    chunk_types[chunk.chunk_type] = chunk_types.get(chunk.chunk_type, 0) + 1
+                
+                for chunk_type, count in chunk_types.items():
+                    st.write(f"• {chunk_type.upper()} chunks: {count}")
+                
+                # RAG Test
+                st.subheader("🧠 RAG Retrieval Test")
+                test_query = st.text_input("Test RAG query:", placeholder="Τι έγγραφα χρειάζομαι;")
+                if test_query:
+                    relevant_chunks = st.session_state.chatbot.retrieve_relevant_chunks(test_query, k=3)
+                    if relevant_chunks:
+                        st.write("**Retrieved chunks:**")
+                        for i, (chunk, score) in enumerate(relevant_chunks):
+                            st.write(f"**Chunk {i+1}** (score: {score:.3f}) - {chunk.source}")
+                            st.write(f"Type: {chunk.chunk_type}")
+                            st.write(f"Content preview: {chunk.content[:200]}...")
+                            st.markdown("---")
+                    else:
+                        st.write("No relevant chunks found")
+            
+            # Enhanced file status
+            qa_file_exists = os.path.exists("qa_data.json")
+            st.write("**Data Sources:**")
+            st.write("• qa_data.json exists:", qa_file_exists)
             st.write("• QA Data Count:", len(st.session_state.chatbot.qa_data))
             
-            # Debug similarity testing
-            st.subheader("🔍 Debug Similarity Testing")
-            test_question = st.text_input("Test question similarity:", placeholder="Σε σύλλογο ενόργανης μπορώ να κάνω πρακτική?")
-            if test_question:
-                st.write("**Similarity Scores:**")
-                similarities = []
-                for qa in st.session_state.chatbot.qa_data:
-                    similarity = st.session_state.chatbot.calculate_similarity(test_question, qa)
-                    similarities.append((similarity, qa['question'], qa['id']))
-                
-                # Sort by similarity
-                similarities.sort(key=lambda x: x[0], reverse=True)
-                
-                for similarity, question, qa_id in similarities[:5]:
-                    color = "🟢" if similarity > 0.15 else "🟡" if similarity > 0.05 else "🔴"
-                    st.write(f"{color} {similarity:.3f} - Q{qa_id}: {question}")
-                
-                # Show what would be returned
-                response, found_match = st.session_state.chatbot.get_fallback_response(test_question)
-                st.write(f"**Would return:** {'✅ Exact match' if found_match else '❌ Fallback response'}")
-            
-            # PDF Status
             if PDF_AVAILABLE:
-                st.write("**PDF Files:**")
-                for filename in st.session_state.chatbot.pdf_files:
-                    cached = "📋" if filename in st.session_state.chatbot.pdf_cache else "⏳"
-                    st.write(f"• {cached} {filename}")
-                
-                if st.session_state.chatbot.pdf_cache:
-                    total_chars = sum(len(content) for content in st.session_state.chatbot.pdf_cache.values())
-                    st.info(f"📊 Cached PDF content: {total_chars:,} characters")
-            else:
-                st.error("📄 PDF processing disabled")
-                st.info("💡 Install: pip install PyPDF2")
-            
-            # File status
-            qa_file_exists = os.path.exists("qa_data.json")
-            st.write("• qa_data.json exists:", qa_file_exists)
-            
-            if qa_file_exists:
-                try:
-                    with open("qa_data.json", 'r', encoding='utf-8') as f:
-                        file_data = json.load(f)
-                    st.success(f"📄 External JSON: {len(file_data)} entries loaded")
-                    st.write(f"• Entry IDs: {[d['id'] for d in file_data[:5]]}")
-                    if len(file_data) > 5:
-                        st.write(f"• ... and {len(file_data)-5} more")
-                    
-                    # File info
-                    file_size = os.path.getsize("qa_data.json")
-                    mtime = os.path.getmtime("qa_data.json")
-                    last_modified = datetime.datetime.fromtimestamp(mtime).strftime("%d/%m/%Y %H:%M")
-                    st.info(f"📊 File size: {file_size:,} bytes")
-                    st.info(f"🕒 Last modified: {last_modified}")
-                    
-                except Exception as e:
-                    st.error(f"❌ JSON Error: {e}")
-            else:
-                st.warning("📋 Using fallback data")
-                st.error("💡 Create qa_data.json with 39 entries!")
-            
-            # Directory info
-            st.write("**File System:**")
-            st.write("• Current dir:", os.getcwd())
-            files = [f for f in os.listdir('.') if f.endswith('.json')]
-            st.write("• JSON files:", files if files else "None found")
-            
-            # Categories info
-            if st.session_state.chatbot.qa_data:
-                categories_count = {}
-                for qa in st.session_state.chatbot.qa_data:
-                    cat = qa.get('category', 'Unknown')
-                    categories_count[cat] = categories_count.get(cat, 0) + 1
-                
-                st.write("**Categories:**")
-                for cat, count in categories_count.items():
-                    st.write(f"• {cat}: {count}")
+                st.write("• PDF Files:", len(st.session_state.chatbot.pdf_files))
+                cached_pdfs = len(st.session_state.chatbot.pdf_cache)
+                st.write(f"• Cached PDFs: {cached_pdfs}/{len(st.session_state.chatbot.pdf_files)}")
 
     # Chat interface
     st.markdown('<div class="chat-container">', unsafe_allow_html=True)
@@ -1062,37 +1180,43 @@ def main():
         if message["role"] == "user":
             st.markdown(f'<div class="user-message"><strong>Εσείς:</strong> {message["content"]}</div>', unsafe_allow_html=True)
         else:
-            # Convert markdown to HTML for better display
             content = message["content"].replace('\n', '<br>')
-            st.markdown(f'<div class="ai-message"><strong>🤖 Assistant:</strong><br><br>{content}</div>', unsafe_allow_html=True)
+            if st.session_state.chatbot.rag_initialized:
+                assistant_name = "🧠 RAG Assistant"
+            else:
+                assistant_name = "🤖 Smart Assistant"
+            st.markdown(f'<div class="ai-message"><strong>{assistant_name}:</strong><br><br>{content}</div>', unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Chat input - moved outside container for better functionality
+    # Chat input
     user_input = st.chat_input("Γράψτε την ερώτησή σας εδώ...")
     
     if user_input:
-        # Add user message
         st.session_state.messages.append({"role": "user", "content": user_input})
         
-        # Get chatbot response
-        with st.spinner("Σκέφτομαι..."):
+        spinner_text = "Performing semantic search and generating response..." if st.session_state.chatbot.rag_initialized else "Generating intelligent response..."
+        
+        with st.spinner(spinner_text):
             try:
                 response = st.session_state.chatbot.get_response(user_input)
             except Exception as e:
                 response = f"Συγγνώμη, παρουσιάστηκε σφάλμα: {str(e)}"
-                st.error(f"Σφάλμα: {e}")
+                st.error(f"Error: {e}")
         
-        # Add assistant response
         st.session_state.messages.append({"role": "assistant", "content": response})
-        
-        # Rerun to display new messages
         st.rerun()
 
     # Footer
-    footer_text = "JSON-First + PDF+JSON AI Assistant" if PDF_AVAILABLE else "JSON-First AI Assistant"
+    if st.session_state.chatbot.rag_initialized:
+        footer_text = "RAG-Powered Semantic Search Assistant"
+    elif st.session_state.chatbot.groq_client:
+        footer_text = "AI-Enhanced Smart Assistant"
+    else:
+        footer_text = "Concept-Based Smart Assistant"
+    
     st.markdown(f"""
-    <div style="text-align: center; color: #6c757d; padding: 1rem;">
+    <div style="text-align: center; color: #6c757d; padding: 1rem; font-size: 0.9rem;">
         <small>
             🎓 <strong>Μητροπολιτικό Κολλέγιο Θεσσαλονίκης</strong> | 
             Τμήμα Προπονητικής & Φυσικής Αγωγής<br>
