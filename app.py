@@ -5,10 +5,9 @@ import os
 import datetime
 import requests
 import io
-import numpy as np
+import hashlib
 from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
-import hashlib
 
 # Import Groq with fallback handling
 try:
@@ -39,17 +38,15 @@ except ImportError:
         fitz = None
         print("⚠️ No PDF library available. PDF search disabled.")
 
-# Import RAG dependencies
+# Check for RAG libraries (optional - graceful degradation)
 try:
     from sentence_transformers import SentenceTransformer
     import faiss
     RAG_AVAILABLE = True
-    print("✅ RAG libraries (sentence-transformers, faiss) imported successfully")
+    print("✅ RAG libraries available but not used (memory optimization)")
 except ImportError:
     RAG_AVAILABLE = False
-    SentenceTransformer = None
-    faiss = None
-    print("⚠️ RAG libraries not available. Install: pip install sentence-transformers faiss-cpu")
+    print("ℹ️ RAG libraries not available (expected for lightweight deployment)")
 
 # Ρύθμιση σελίδας
 st.set_page_config(
@@ -60,14 +57,6 @@ st.set_page_config(
 )
 
 @dataclass
-class DocumentChunk:
-    id: str
-    content: str
-    source: str
-    chunk_type: str  # 'qa', 'pdf'
-    metadata: Dict
-
-@dataclass
 class QAEntry:
     id: int
     category: str
@@ -75,7 +64,7 @@ class QAEntry:
     answer: str
     keywords: List[str]
 
-class RAGInternshipChatbot:
+class OptimizedInternshipChatbot:
     def __init__(self, groq_api_key: str = None):
         # Initialize Groq client
         self.groq_client = None
@@ -86,30 +75,10 @@ class RAGInternshipChatbot:
             except Exception as e:
                 print(f"⚠️ Failed to initialize Groq: {e}")
         
-        # Initialize RAG components
-        self.embedder = None
-        self.faiss_index = None
-        self.document_chunks = []
-        self.embeddings_cache = {}
-        
-        # Initialize RAG if available
-        if RAG_AVAILABLE:
-            try:
-                print("🔄 Initializing RAG system...")
-                # Use multilingual model that works well with Greek
-                self.embedder = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
-                print("✅ RAG embedding model loaded")
-                self.rag_initialized = True
-            except Exception as e:
-                print(f"⚠️ Failed to initialize RAG: {e}")
-                self.rag_initialized = False
-        else:
-            self.rag_initialized = False
-        
         # Load Q&A data
         self.qa_data = self.load_qa_data()
         
-        # Initialize PDF files cache
+        # Initialize PDF files cache with memory optimization
         self.pdf_cache = {}
         self.pdf_files = [
             "1.ΑΙΤΗΣΗ ΠΡΑΓΜΑΤΟΠΟΙΗΣΗΣ ΠΡΑΚΤΙΚΗΣ ΑΣΚΗΣΗΣ.pdf",
@@ -121,17 +90,45 @@ class RAGInternshipChatbot:
             "8.ΒΙΒΛΙΟ_ΠΡΑΚΤΙΚΗΣ_final.pdf"
         ]
         
-        # Build RAG database if available
-        if self.rag_initialized:
-            self.build_rag_database()
+        # Enhanced concept patterns for smart matching
+        self.concept_patterns = {
+            'documents': {
+                'keywords': ['έγγραφα', 'εγγραφα', 'χαρτιά', 'χαρτια', 'αίτηση', 'αιτηση', 'δικαιολογητικά', 'δικαιολογητικα', 'φόρμα', 'φορμα', 'στοιχεία', 'στοιχεια'],
+                'weight': 1.0
+            },
+            'facilities': {
+                'keywords': ['δομές', 'δομη', 'σύλλογος', 'συλλογος', 'γυμναστήριο', 'γυμναστηριο', 'φορείς', 'φορεις', 'εγκαταστάσεις', 'εγκαταστασεις'],
+                'weight': 1.0
+            },
+            'sports': {
+                'keywords': ['ενόργανη', 'ενοργανη', 'ποδόσφαιρο', 'ποδοσφαιρο', 'μπάσκετ', 'μπασκετ', 'βόλεϊ', 'βολει', 'fitness', 'γυμναστική', 'γυμναστικη'],
+                'weight': 0.8
+            },
+            'time': {
+                'keywords': ['ώρες', 'ωρες', '240', 'χρόνος', 'χρονος', 'διάρκεια', 'διαρκεια', 'deadline', 'προθεσμία', 'προθεσμια', 'χρονοδιάγραμμα', 'χρονοδιαγραμμα'],
+                'weight': 1.0
+            },
+            'money': {
+                'keywords': ['αμοιβή', 'αμοιβη', 'πληρωμή', 'πληρωμη', 'κόστος', 'κοστος', 'χρήματα', 'χρηματα', 'λεφτά', 'λεφτα', 'τέλος', 'τελος'],
+                'weight': 0.9
+            },
+            'process': {
+                'keywords': ['ξεκινάω', 'ξεκινω', 'βήματα', 'βηματα', 'διαδικασία', 'διαδικασια', 'πώς', 'πως', 'πως να', 'κάνω', 'κανω'],
+                'weight': 1.0
+            },
+            'contact': {
+                'keywords': ['επικοινωνία', 'επικοινωνια', 'υπεύθυνος', 'υπευθυνος', 'email', 'τηλέφωνο', 'τηλεφωνο', 'βοήθεια', 'βοηθεια'],
+                'weight': 1.0
+            }
+        }
         
-        # Enhanced system prompt for RAG
+        # Enhanced system prompt for optimized AI
         self.system_prompt = """Είσαι ένας εξειδικευμένος σύμβουλος για θέματα πρακτικής άσκησης στο Μητροπολιτικό Κολλέγιο Θεσσαλονίκης, τμήμα Προπονητικής και Φυσικής Αγωγής.
 
-ΧΡΗΣΙΜΟΠΟΙΕΙΣ ΣΥΣΤΗΜΑ RAG (Retrieval-Augmented Generation):
-- Έχεις πρόσβαση σε σημασιολογικώς σχετικό περιεχόμενο από επίσημα έγγραφα και βάση γνώσης
-- Το σύστημα αναζήτησης εντοπίζει τα πιο σχετικά τμήματα κειμένου για κάθε ερώτηση
-- Χρησιμοποίησε το παρεχόμενο περιεχόμενο για να δώσεις ακριβείς και χρήσιμες απαντήσεις
+ΣΥΣΤΗΜΑ ΕΞΥΠΝΗΣ ΑΝΑΛΥΣΗΣ:
+- Χρησιμοποιείς προηγμένη ανάλυση εννοιών και συμπερασμού
+- Έχεις πρόσβαση σε επίσημα έγγραφα και βάση γνώσης Q&A
+- Συνδυάζεις πληροφορίες από πολλαπλές πηγές για πλήρεις απαντήσεις
 
 ΚΡΙΣΙΜΕΣ ΓΛΩΣΣΙΚΕΣ ΟΔΗΓΙΕΣ:
 - Χρησιμοποίησε ΑΠΟΚΛΕΙΣΤΙΚΑ ελληνικούς χαρακτήρες
@@ -141,13 +138,13 @@ class RAGInternshipChatbot:
 ΙΕΡΑΡΧΙΑ ΠΛΗΡΟΦΟΡΙΩΝ:
 1. ΕΠΙΣΗΜΑ ΕΓΓΡΑΦΑ PDF (υψηλότερη προτεραιότητα)
 2. ΒΑΣΗ ΓΝΩΣΗΣ JSON (μέση προτεραιότητα)
-3. ΓΕΝΙΚΗ ΓΝΩΣΗ (χαμηλή προτεραιότητα)
+3. ΛΟΓΙΚΟΣ ΣΥΜΠΕΡΑΣΜΟΣ (χαμηλή προτεραιότητα)
 
-ΣΤΡΑΤΗΓΙΚΗ RAG:
-1. Αναλύσε τις ανακτημένες πληροφορίες για σχετικότητα
-2. Συνδύασε πληροφορίες από διαφορετικές πηγές όταν χρειάζεται
-3. Χρησιμοποίησε σημασιολογική κατανόηση για βαθύτερη ανάλυση
-4. Δώσε δομημένες, πρακτικές απαντήσεις με συγκεκριμένα βήματα
+ΣΤΡΑΤΗΓΙΚΗ ΕΞΥΠΝΗΣ ΑΝΑΛΥΣΗΣ:
+1. Αναλύσε την ερώτηση για βασικές έννοιες και πρόθεση
+2. Εντόπισε σχετικές πληροφορίες από διαθέσιμες πηγές
+3. Συνδύασε δεδομένα με λογικό συμπερασμό
+4. Δώσε δομημένες, πρακτικές απαντήσεις
 
 ΣΤΥΛ ΑΠΑΝΤΗΣΗΣ:
 - Επαγγελματικός και επίσημος τόνος
@@ -162,17 +159,17 @@ class RAGInternshipChatbot:
 - Ωράριο: Δευτέρα-Σάββατο, μέχρι 8 ώρες/ημέρα
 - Σύμβαση: Ανέβασμα στο moodle μέχρι 15/10
 
-Απάντησε πάντα στα ελληνικά με επαγγελματικό τόνο χρησιμοποιώντας το σύστημα RAG."""
+Απάντησε πάντα στα ελληνικά με επαγγελματικό τόνο χρησιμοποιώντας εξυπνη ανάλυση."""
 
     def load_qa_data(self) -> List[Dict]:
-        """Load Q&A data with better error handling"""
+        """Load Q&A data with memory optimization"""
         filename = "qa_data.json"
         
         print(f"🔍 Looking for {filename}...")
         
         if not os.path.exists(filename):
             print(f"❌ File {filename} not found")
-            return self.get_updated_fallback_data()
+            return self.get_enhanced_fallback_data()
         
         try:
             with open(filename, 'r', encoding='utf-8') as f:
@@ -180,71 +177,71 @@ class RAGInternshipChatbot:
                 
             if not isinstance(data, list) or not data:
                 print(f"❌ Invalid data format in {filename}")
-                return self.get_updated_fallback_data()
+                return self.get_enhanced_fallback_data()
             
             required_fields = ['id', 'category', 'question', 'answer', 'keywords']
             for i, entry in enumerate(data):
                 if not all(field in entry for field in required_fields):
                     print(f"❌ Missing fields in entry {i}")
-                    return self.get_updated_fallback_data()
+                    return self.get_enhanced_fallback_data()
             
             print(f"✅ Successfully loaded {len(data)} Q&A entries")
             return data
             
         except Exception as e:
             print(f"❌ Error loading {filename}: {e}")
-            return self.get_updated_fallback_data()
+            return self.get_enhanced_fallback_data()
 
-    def get_updated_fallback_data(self) -> List[Dict]:
-        """Updated fallback data with more entries"""
+    def get_enhanced_fallback_data(self) -> List[Dict]:
+        """Enhanced fallback data with comprehensive coverage"""
         print("📋 Using enhanced fallback data...")
         return [
             {
                 "id": 1,
                 "category": "Γενικές Πληροφορίες",
                 "question": "Πώς ξεκινάω την πρακτική μου άσκηση;",
-                "answer": "1. Επικοινωνώ με τον υπεύθυνο της πρακτικής: gsofianidis@mitropolitiko.edu.gr\n\n2. Βρίσκω τη δομή που θα κάνω πρακτική\n\n3. Κατεβάζω τα έγγραφα από το μάθημα SPORTS COACHING PRACTICE & EXPERTISE DEVELOPMENT (SE5117) στο Moodle. Τα συμπληρώνω και τα ανεβάζω ξανά στη σχετική πύλη στο μάθημα SPORTS COACHING PRACTICE & EXPERTISE DEVELOPMENT (SE5117) στο Moodle.\n\n4. Περιμένω την υπογραφή της σύμβασής μου και την ανάρτησή της στο ΕΡΓΑΝΗ\n\n5. Ξεκινάω την πρακτική",
-                "keywords": ["ξεκινάω", "ξεκινώ", "αρχή", "αρχίζω", "αρχίσω", "ξεκίνημα", "πρακτική", "άσκηση", "πώς", "πως", "βήματα", "διαδικασία", "διαδικασιες"]
+                "answer": "ΒΗΜΑΤΑ ΕΝΑΡΞΗΣ ΠΡΑΚΤΙΚΗΣ ΑΣΚΗΣΗΣ:\n\n1. ΕΠΙΚΟΙΝΩΝΙΑ:\nΕπικοινωνώ με τον υπεύθυνο: gsofianidis@mitropolitiko.edu.gr\n\n2. ΕΠΙΛΟΓΗ ΔΟΜΗΣ:\nΒρίσκω κατάλληλη δομή (σύλλογος, γυμναστήριο, ακαδημία)\n\n3. ΕΓΓΡΑΦΑ:\nΚατεβάζω έγγραφα από το Moodle (SE5117)\nΣυμπληρώνω και ανεβάζω στην πλατφόρμα\n\n4. ΣΥΜΒΑΣΗ:\nΠεριμένω υπογραφή και ανάρτηση στο ΕΡΓΑΝΗ\n\n5. ΕΝΑΡΞΗ:\nΞεκινάω την πρακτική άσκηση\n\nΕΠΙΚΟΙΝΩΝΙΑ: gsofianidis@mitropolitiko.edu.gr",
+                "keywords": ["ξεκινάω", "ξεκινώ", "αρχή", "αρχίζω", "αρχίσω", "ξεκίνημα", "πρακτική", "άσκηση", "πώς", "πως", "βήματα", "διαδικασία", "διαδικασιες", "κάνω", "κανω"]
             },
             {
                 "id": 2,
                 "category": "Έγγραφα & Διαδικασίες",
                 "question": "Τι έγγραφα χρειάζομαι για την πρακτική άσκηση;",
-                "answer": "Για εσάς (φοιτητή):\n• Αίτηση πραγματοποίησης πρακτικής άσκησης\n• Στοιχεία φοιτητή (συμπληρωμένη φόρμα)\n• Ασφαλιστική ικανότητα από gov.gr\n• Υπεύθυνη δήλωση (δεν παίρνετε επίδομα ΟΑΕΔ)\n\nΓια τη δομή:\n• Στοιχεία φορέα (ΑΦΜ, διεύθυνση, νόμιμος εκπρόσωπος)\n• Ημέρες και ώρες που σας δέχεται\n\nTip: Ξεκινήστε από την ασφαλιστική ικανότητα γιατί παίρνει χρόνο!",
-                "keywords": ["έγγραφα", "εγγραφα", "χαρτιά", "χαρτια", "χρειάζομαι", "χρειαζομαι", "απαιτήσεις", "απαιτησεις", "απαιτούνται", "απαιτουνται", "δικαιολογητικά", "δικαιολογητικα", "φάκελος", "φακελος", "αίτηση", "αιτηση"]
+                "answer": "ΑΠΑΙΤΟΥΜΕΝΑ ΕΓΓΡΑΦΑ:\n\nΓΙΑ ΤΟΝ ΦΟΙΤΗΤΗ:\n• Αίτηση πραγματοποίησης πρακτικής άσκησης\n• Στοιχεία φοιτητή (συμπληρωμένη φόρμα)\n• Ασφαλιστική ικανότητα από gov.gr\n• Υπεύθυνη δήλωση (μη λήψη επιδόματος ΟΑΕΔ)\n\nΓΙΑ ΤΗ ΔΟΜΗ:\n• Στοιχεία φορέα (ΑΦΜ, διεύθυνση, νόμιμος εκπρόσωπος)\n• Ημέρες και ώρες δεκτότητας\n\n⚠️ ΣΗΜΑΝΤΙΚΟ:\nΞεκινήστε από την ασφαλιστική ικανότητα - χρειάζεται χρόνο!\n\nΠΗΓΗ ΕΓΓΡΑΦΩΝ: Moodle SE5117\nΕΠΙΚΟΙΝΩΝΙΑ: gsofianidis@mitropolitiko.edu.gr",
+                "keywords": ["έγγραφα", "εγγραφα", "χαρτιά", "χαρτια", "χρειάζομαι", "χρειαζομαι", "απαιτήσεις", "απαιτησεις", "δικαιολογητικά", "δικαιολογητικα", "φάκελος", "φακελος", "αίτηση", "αιτηση", "φόρμα", "φορμα"]
             },
             {
                 "id": 5,
                 "category": "Δομές & Φορείς",
                 "question": "Σε ποιες δομές μπορώ να κάνω πρακτική άσκηση;",
-                "answer": "Μπορείτε να κάνετε πρακτική άσκηση σε:\n\n• Αθλητικούς συλλόγους (ποδόσφαιρο, μπάσκετ, βόλεϊ, ενόργανη γυμναστική, κλπ)\n• Γυμναστήρια και fitness centers\n• Κολυμβητήρια\n• Ακαδημίες αθλητισμού\n• Δημόσιους αθλητικούς οργανισμούς\n• Σχολεία (με τμήμα φυσικής αγωγής)\n• Κέντρα αποκατάστασης\n• Personal training studios\n\nΗ δομή πρέπει να έχει:\n• Εκπαιδευτή/υπεύθυνο με τα κατάλληλα προσόντα\n• Νόμιμη λειτουργία και ΑΦΜ\n• Δυνατότητα να σας καθοδηγήσει στην πρακτική",
-                "keywords": ["δομές", "δομη", "φορείς", "φορεις", "σύλλογος", "συλλογος", "γυμναστήριο", "γυμναστηριο", "ενόργανη", "ενοργανη", "ποδόσφαιρο", "ποδοσφαιρο", "μπάσκετ", "μπασκετ", "κολυμβητήριο", "κολυμβητηριο", "ακαδημία", "ακαδημια", "fitness", "personal", "training", "που", "ποιες", "ποιους", "ποια"]
+                "answer": "ΕΓΚΕΚΡΙΜΕΝΕΣ ΔΟΜΕΣ ΠΡΑΚΤΙΚΗΣ:\n\n🏃‍♂️ ΑΘΛΗΤΙΚΕΣ ΔΟΜΕΣ:\n• Αθλητικούς συλλόγους (ποδόσφαιρο, μπάσκετ, βόλεϊ, ενόργανη γυμναστική)\n• Γυμναστήρια και fitness centers\n• Κολυμβητήρια\n• Ακαδημίες αθλητισμού\n• Personal training studios\n\n🏛️ ΔΗΜΟΣΙΟΙ ΦΟΡΕΙΣ:\n• Δημόσιους αθλητικούς οργανισμούς\n• Σχολεία με τμήμα φυσικής αγωγής\n• Κέντρα αποκατάστασης\n\nΠΡΟΥΠΟΘΕΣΕΙΣ ΔΟΜΗΣ:\n✅ Νόμιμη λειτουργία και ΑΦΜ\n✅ Εκπαιδευτής με κατάλληλα προσόντα\n✅ Δυνατότητα καθοδήγησης\n\nΕΓΚΡΙΣΗ ΔΟΜΗΣ: gsofianidis@mitropolitiko.edu.gr",
+                "keywords": ["δομές", "δομη", "φορείς", "φορεις", "σύλλογος", "συλλογος", "γυμναστήριο", "γυμναστηριο", "ενόργανη", "ενοργανη", "ποδόσφαιρο", "ποδοσφαιρο", "μπάσκετ", "μπασκετ", "κολυμβητήριο", "κολυμβητηριο", "ακαδημία", "ακαδημια", "fitness", "personal", "training", "που", "ποιες", "ποιους", "ποια", "εγκαταστάσεις", "εγκαταστασεις"]
             },
             {
                 "id": 30,
                 "category": "Οικονομικά & Αμοιβή",
                 "question": "Παίρνω αμοιβή για την πρακτική άσκηση; Τι κόστος έχει για τη δομή;",
-                "answer": "ΓΙΑ ΤΟΥΣ ΦΟΙΤΗΤΕΣ:\n\nΔΕΝ υπάρχει αμοιβή για την πρακτική άσκηση\n• Η πρακτική άσκηση είναι μη αμειβόμενη\n• Είναι μέρος των σπουδών σας\n• Δεν πρόκειται για εργασιακή σχέση\n\nΓΙΑ ΤΗ ΔΟΜΗ:\n\nΗ δομή δε χρεώνεται κάτι (σχεδόν)\n• Υπάρχει ένα ελάχιστο τέλος που ενδεχομένως πρέπει να καταβάλει\n• Το κολλέγιο καλύπτει τα έξοδα της σύμβασης\n• Η ασφάλιση τιμολογείται στο κολλέγιο\n• Δεν υπάρχει οικονομική υποχρέωση προς τους φοιτητές",
+                "answer": "ΟΙΚΟΝΟΜΙΚΑ ΘΕΜΑΤΑ ΠΡΑΚΤΙΚΗΣ:\n\n💰 ΓΙΑ ΤΟΥΣ ΦΟΙΤΗΤΕΣ:\n❌ ΔΕΝ υπάρχει αμοιβή\n• Η πρακτική άσκηση είναι μη αμειβόμενη\n• Αποτελεί μέρος των σπουδών\n• Δεν είναι εργασιακή σχέση\n\n🏢 ΓΙΑ ΤΗ ΔΟΜΗ:\n✅ Ελάχιστο ή μηδενικό κόστος\n• Ενδεχόμενο ελάχιστο διοικητικό τέλος\n• Το κολλέγιο καλύπτει έξοδα σύμβασης\n• Ασφάλιση τιμολογείται στο κολλέγιο\n• Χωρίς οικονομική υποχρέωση προς φοιτητές\n\nΠΛΗΡΟΦΟΡΙΕΣ: gsofianidis@mitropolitiko.edu.gr",
                 "keywords": ["αμοιβή", "αμοιβη", "πληρωμή", "πληρωμη", "πληρώθώ", "πληρωθώ", "πληρωθω", "πληρωνομαι", "πληρώνομαι", "λεφτά", "λεφτα", "χρήματα", "χρηματα", "κόστος", "κοστος", "τέλος", "τελος", "δομή", "δομη", "φοιτητής", "φοιτητη", "οικονομικά", "οικονομικα", "μισθός", "μισθος"]
             },
             {
                 "id": 11,
                 "category": "Επικοινωνία",
                 "question": "Με ποιον επικοινωνώ για την πρακτική άσκηση;",
-                "answer": "ΚΥΡΙΑ ΕΠΙΚΟΙΝΩΝΙΑ:\n\nΓεώργιος Σοφιανίδης, MSc, PhD(c)\n📧 gsofianidis@mitropolitiko.edu.gr\nΥπεύθυνος Πρακτικής Άσκησης\n\nΕΝΑΛΛΑΚΤΙΚΗ ΕΠΙΚΟΙΝΩΝΙΑ:\n\nΓεώργιος Μπουχουράς, MSc, PhD\n📧 gbouchouras@mitropolitiko.edu.gr\n📞 2314 409000\nProgramme Leader\n\nΠότε να επικοινωνήσετε:\n• Ερωτήσεις για έγγραφα ➜ Γεώργιος Σοφιανίδης\n• Τεχνικά προβλήματα ➜ Γεώργιος Σοφιανίδης\n• Θέματα προγράμματος ➜ Γεώργιος Μπουχουράς",
+                "answer": "ΣΤΟΙΧΕΙΑ ΕΠΙΚΟΙΝΩΝΙΑΣ:\n\n👨‍🏫 ΚΥΡΙΑ ΕΠΙΚΟΙΝΩΝΙΑ:\nΓεώργιος Σοφιανίδης, MSc, PhD(c)\n📧 gsofianidis@mitropolitiko.edu.gr\n🏷️ Υπεύθυνος Πρακτικής Άσκησης\n\n👨‍💼 ΕΝΑΛΛΑΚΤΙΚΗ ΕΠΙΚΟΙΝΩΝΙΑ:\nΓεώργιος Μπουχουράς, MSc, PhD\n📧 gbouchouras@mitropolitiko.edu.gr\n📞 2314 409000\n🏷️ Programme Leader\n\n📋 ΚΑΤΗΓΟΡΙΟΠΟΙΗΣΗ ΘΕΜΑΤΩΝ:\n• Ερωτήσεις για έγγραφα ➜ Γεώργιος Σοφιανίδης\n• Τεχνικά προβλήματα ➜ Γεώργιος Σοφιανίδης\n• Θέματα προγράμματος ➜ Γεώργιος Μπουχουράς\n\n⏰ ΩΡΑΡΙΟ: Δευτέρα-Παρασκευή, 9:00-17:00",
                 "keywords": ["επικοινωνία", "επικοινωνια", "Σοφιανίδης", "Σοφιανιδης", "Μπουχουράς", "Μπουχουρας", "email", "τηλέφωνο", "τηλεφωνο", "υπεύθυνος", "υπευθυνος", "βοήθεια", "βοηθεια", "καθηγητής", "καθηγητης", "καθηγήτρια", "καθηγητρια", "contact", "στοιχεία", "στοιχεια"]
             },
             {
                 "id": 4,
                 "category": "Ώρες & Χρονοδιάγραμμα",
                 "question": "Πόσες ώρες πρέπει να κάνω πρακτική άσκηση;",
-                "answer": "Υποχρεωτικό: Τουλάχιστον 240 ώρες\n\nDeadline: Μέχρι 30 Μάϊου\n\nΚανόνες ωραρίου:\n• Δευτέρα έως Σάββατο (ΌΧΙ Κυριακές, 5μέρες/εβδ)\n• Μέχρι 8 ώρες την ημέρα\n• Το ωράριο ορίζεται από τη δομή σε συνεργασία μαζί σας\n\nΥπολογισμός: 240 ώρες = περίπου 6 εβδομάδες x 40 ώρες ή 8 εβδομάδες x 30 ώρες",
-                "keywords": ["ώρες", "ωρες", "240", "ποσες", "πόσες", "ποσα", "ποσά", "συνολικά", "συνολικα", "όλες", "ολες", "τελικά", "τελικα", "χρονοδιάγραμμα", "χρονοδιαγραμμα", "διάρκεια", "διαρκεια", "χρόνος", "χρονος", "30/5", "deadline"]
+                "answer": "ΧΡΟΝΙΚΕΣ ΑΠΑΙΤΗΣΕΙΣ:\n\n⏱️ ΣΥΝΟΛΙΚΕΣ ΩΡΕΣ:\n240 ώρες (υποχρεωτικό ελάχιστο)\n\n📅 ΠΡΟΘΕΣΜΙΑ:\nΜέχρι 30 Μαΐου\n\n📆 ΚΑΝΟΝΕΣ ΩΡΑΡΙΟΥ:\n• Δευτέρα έως Σάββατο\n• ΌΧΙ Κυριακές\n• Μέχρι 8 ώρες/ημέρα\n• 5 ημέρες/εβδομάδα\n\n📊 ΠΑΡΑΔΕΙΓΜΑΤΑ ΠΡΟΓΡΑΜΜΑΤΙΣΜΟΥ:\n• 6 εβδομάδες × 40 ώρες\n• 8 εβδομάδες × 30 ώρες\n• 10 εβδομάδες × 24 ώρες\n\nΣΥΜΦΩΝΙΑ: Το ωράριο ορίζεται από τη δομή σε συνεργασία μαζί σας\n\nΠΛΗΡΟΦΟΡΙΕΣ: gsofianidis@mitropolitiko.edu.gr",
+                "keywords": ["ώρες", "ωρες", "240", "ποσες", "πόσες", "ποσα", "ποσά", "συνολικά", "συνολικα", "όλες", "ολες", "τελικά", "τελικα", "χρονοδιάγραμμα", "χρονοδιαγραμμα", "διάρκεια", "διαρκεια", "χρόνος", "χρονος", "30/5", "deadline", "προθεσμία", "προθεσμια"]
             }
         ]
 
     def download_pdf_file(self, filename: str) -> str:
-        """Download and extract text from PDF file from GitHub"""
+        """Memory-optimized PDF download and processing"""
         if not PDF_AVAILABLE:
             print(f"⚠️ No PDF library available, cannot process {filename}")
             return ""
@@ -260,7 +257,7 @@ class RAGInternshipChatbot:
             
             print(f"🔍 Downloading {filename} from GitHub using {PDF_METHOD}...")
             
-            response = requests.get(url, timeout=10)
+            response = requests.get(url, timeout=15)
             response.raise_for_status()
             
             text_content = []
@@ -271,23 +268,29 @@ class RAGInternshipChatbot:
                     try:
                         page_text = page.extract_text()
                         if page_text.strip():
-                            text_content.append(page_text.strip())
+                            # Memory optimization: limit content length
+                            text_content.append(page_text.strip()[:2000])  # Limit per page
                     except Exception as e:
                         print(f"⚠️ Error extracting page {page_num}: {e}")
                 
             elif PDF_METHOD == "PyMuPDF":
                 pdf_document = fitz.open(stream=response.content, filetype="pdf")
-                for page_num in range(pdf_document.page_count):
+                for page_num in range(min(pdf_document.page_count, 10)):  # Limit pages for memory
                     try:
                         page = pdf_document[page_num]
                         page_text = page.get_text()
                         if page_text.strip():
-                            text_content.append(page_text.strip())
+                            text_content.append(page_text.strip()[:2000])  # Limit per page
                     except Exception as e:
                         print(f"⚠️ Error extracting page {page_num}: {e}")
                 pdf_document.close()
             
             full_text = "\n".join(text_content)
+            
+            # Memory optimization: Cache only essential content
+            if len(full_text) > 5000:
+                full_text = full_text[:5000] + "...\n[Περιεχόμενο περιορίστηκε για βελτιστοποίηση μνήμης]"
+            
             self.pdf_cache[filename] = full_text
             
             print(f"✅ Successfully processed {filename} ({len(full_text)} characters)")
@@ -297,218 +300,207 @@ class RAGInternshipChatbot:
             print(f"❌ Failed to process {filename}: {e}")
             return ""
 
-    def chunk_text(self, text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
-        """Split text into overlapping chunks for better RAG performance"""
-        if len(text) <= chunk_size:
-            return [text]
+    def extract_concepts(self, question: str) -> Dict[str, float]:
+        """Enhanced concept extraction with scoring"""
+        question_lower = question.lower()
+        detected_concepts = {}
         
-        chunks = []
-        start = 0
+        for concept, data in self.concept_patterns.items():
+            matches = sum(1 for keyword in data['keywords'] if keyword in question_lower)
+            if matches > 0:
+                # Calculate concept strength
+                strength = (matches / len(data['keywords'])) * data['weight']
+                detected_concepts[concept] = strength
         
-        while start < len(text):
-            end = start + chunk_size
-            
-            # Try to break at sentence boundary
-            if end < len(text):
-                # Look for sentence ending within the last 100 characters
-                search_start = max(start + chunk_size - 100, start)
-                sentence_end = -1
-                
-                for delimiter in ['. ', '.\n', '! ', '!\n', '? ', '?\n']:
-                    pos = text.rfind(delimiter, search_start, end)
-                    if pos > sentence_end:
-                        sentence_end = pos + len(delimiter)
-                
-                if sentence_end > start:
-                    end = sentence_end
-            
-            chunk = text[start:end].strip()
-            if chunk:
-                chunks.append(chunk)
-            
-            start = end - overlap
-        
-        return chunks
+        return detected_concepts
 
-    def build_rag_database(self):
-        """Build RAG vector database from Q&A and PDF content"""
-        if not self.rag_initialized:
-            print("⚠️ RAG not initialized, skipping database build")
-            return
+    def enhanced_similarity_calculation(self, question: str, qa_entry: Dict) -> float:
+        """Enhanced similarity calculation with concept weighting"""
+        question_lower = question.lower()
         
-        print("🔄 Building RAG vector database...")
+        # Extract concepts
+        question_concepts = self.extract_concepts(question)
         
-        self.document_chunks = []
-        all_embeddings = []
+        # Base keyword matching
+        keyword_matches = sum(1 for keyword in qa_entry.get('keywords', []) 
+                            if keyword.lower() in question_lower)
+        keyword_score = keyword_matches / max(len(qa_entry.get('keywords', [])), 1) * 0.4
         
-        # Process Q&A data
-        print("📋 Processing Q&A data for RAG...")
+        # Title similarity
+        title_words = qa_entry['question'].lower().split()
+        question_words = [w for w in question_lower.split() if len(w) > 2]
+        
+        title_matches = sum(1 for word in title_words if word in question_lower and len(word) > 2)
+        reverse_matches = sum(1 for word in question_words if word in qa_entry['question'].lower())
+        title_score = (title_matches + reverse_matches) / max(len(title_words) + len(question_words), 1) * 0.3
+        
+        # Concept-category matching
+        qa_category = qa_entry.get('category', '').lower()
+        concept_score = 0
+        
+        for concept, strength in question_concepts.items():
+            if concept == 'documents' and ('έγγραφα' in qa_category or 'διαδικασίες' in qa_category):
+                concept_score += strength * 0.3
+            elif concept == 'facilities' and ('δομές' in qa_category or 'φορείς' in qa_category):
+                concept_score += strength * 0.3
+            elif concept == 'time' and ('ώρες' in qa_category or 'χρονοδιάγραμμα' in qa_category):
+                concept_score += strength * 0.3
+            elif concept == 'money' and 'οικονομικά' in qa_category:
+                concept_score += strength * 0.3
+            elif concept == 'contact' and 'επικοινωνία' in qa_category:
+                concept_score += strength * 0.3
+        
+        total_score = keyword_score + title_score + concept_score
+        return min(total_score, 1.0)
+
+    def get_contextual_matches(self, question: str, max_matches: int = 3) -> List[Dict]:
+        """Get contextually relevant Q&A matches"""
+        if not self.qa_data:
+            return []
+        
+        # Calculate similarities
+        scored_matches = []
         for qa in self.qa_data:
-            # Create chunks for question and answer separately
-            qa_text = f"Ερώτηση: {qa['question']} Απάντηση: {qa['answer']}"
-            chunks = self.chunk_text(qa_text, chunk_size=400, overlap=50)
-            
-            for i, chunk in enumerate(chunks):
-                chunk_id = f"qa_{qa['id']}_{i}"
-                doc_chunk = DocumentChunk(
-                    id=chunk_id,
-                    content=chunk,
-                    source=f"Q&A Entry {qa['id']}",
-                    chunk_type="qa",
-                    metadata={
-                        "category": qa.get('category', 'Unknown'),
-                        "keywords": qa.get('keywords', []),
-                        "qa_id": qa['id']
-                    }
-                )
-                self.document_chunks.append(doc_chunk)
+            similarity = self.enhanced_similarity_calculation(question, qa)
+            if similarity > 0.05:  # Threshold for relevance
+                scored_matches.append((similarity, qa))
         
-        # Process PDF content
-        if PDF_AVAILABLE:
-            print("📄 Processing PDF files for RAG...")
-            for filename in self.pdf_files:
-                content = self.download_pdf_file(filename)
-                if content:
-                    chunks = self.chunk_text(content, chunk_size=600, overlap=100)
-                    
-                    for i, chunk in enumerate(chunks):
-                        chunk_id = f"pdf_{filename}_{i}"
-                        doc_chunk = DocumentChunk(
-                            id=chunk_id,
-                            content=chunk,
-                            source=filename,
-                            chunk_type="pdf",
-                            metadata={
-                                "filename": filename,
-                                "chunk_index": i
-                            }
-                        )
-                        self.document_chunks.append(doc_chunk)
-        
-        print(f"📊 Created {len(self.document_chunks)} document chunks")
-        
-        # Generate embeddings
-        if self.document_chunks:
-            print("🧮 Generating embeddings...")
-            chunk_texts = [chunk.content for chunk in self.document_chunks]
-            
-            try:
-                # Generate embeddings in batches to avoid memory issues
-                batch_size = 32
-                all_embeddings = []
-                
-                for i in range(0, len(chunk_texts), batch_size):
-                    batch = chunk_texts[i:i + batch_size]
-                    batch_embeddings = self.embedder.encode(batch, show_progress_bar=False)
-                    all_embeddings.extend(batch_embeddings)
-                
-                # Create FAISS index
-                embeddings_array = np.array(all_embeddings).astype('float32')
-                
-                # Normalize embeddings for cosine similarity
-                faiss.normalize_L2(embeddings_array)
-                
-                # Use IndexFlatIP for inner product (cosine similarity with normalized vectors)
-                self.faiss_index = faiss.IndexFlatIP(embeddings_array.shape[1])
-                self.faiss_index.add(embeddings_array)
-                
-                print(f"✅ RAG database built successfully with {len(self.document_chunks)} chunks")
-                
-            except Exception as e:
-                print(f"❌ Error building RAG database: {e}")
-                self.faiss_index = None
-        else:
-            print("⚠️ No content available for RAG database")
+        # Sort and return top matches
+        scored_matches.sort(key=lambda x: x[0], reverse=True)
+        return [qa for score, qa in scored_matches[:max_matches]]
 
-    def retrieve_relevant_chunks(self, query: str, k: int = 5) -> List[Tuple[DocumentChunk, float]]:
-        """Retrieve most relevant document chunks using RAG"""
-        if not self.rag_initialized or self.faiss_index is None:
-            print("⚠️ RAG not available for retrieval")
-            return []
+    def search_pdfs_intelligently(self, question: str, concepts: Dict[str, float]) -> str:
+        """Intelligent PDF search with concept-based filtering"""
+        if not PDF_AVAILABLE:
+            return ""
         
-        try:
-            # Encode query
-            query_embedding = self.embedder.encode([query])
-            query_embedding = query_embedding.astype('float32')
-            faiss.normalize_L2(query_embedding)
-            
-            # Search for similar chunks
-            scores, indices = self.faiss_index.search(query_embedding, k)
-            
-            relevant_chunks = []
-            for score, idx in zip(scores[0], indices[0]):
-                if idx < len(self.document_chunks):
-                    chunk = self.document_chunks[idx]
-                    relevant_chunks.append((chunk, float(score)))
-            
-            print(f"🔍 Retrieved {len(relevant_chunks)} relevant chunks (scores: {[f'{s:.3f}' for _, s in relevant_chunks]})")
-            return relevant_chunks
-            
-        except Exception as e:
-            print(f"❌ Error in RAG retrieval: {e}")
-            return []
+        print("📄 Searching PDFs with concept analysis...")
+        
+        question_lower = question.lower()
+        question_words = [w for w in question_lower.split() if len(w) > 3]
+        
+        relevant_content = []
+        
+        for filename in self.pdf_files:
+            content = self.download_pdf_file(filename)
+            if content:
+                content_lower = content.lower()
+                
+                # Calculate relevance score
+                word_matches = sum(1 for word in question_words if word in content_lower)
+                concept_matches = sum(strength for concept, strength in concepts.items() 
+                                    if self._check_concept_in_pdf(concept, content_lower))
+                
+                relevance_score = word_matches * 0.4 + concept_matches * 0.6
+                
+                if relevance_score > 0.3:
+                    # Extract relevant sections
+                    sections = self._extract_relevant_sections(content, question_words, max_chars=800)
+                    if sections:
+                        relevant_content.append(f"[Από {filename}]\n{sections}")
+                        print(f"✅ Found relevant content in {filename} (score: {relevance_score:.2f})")
+        
+        return "\n\n".join(relevant_content) if relevant_content else ""
 
-    def get_rag_response(self, user_message: str) -> Tuple[str, bool]:
-        """Get response using RAG (Retrieval-Augmented Generation)"""
+    def _check_concept_in_pdf(self, concept: str, text: str) -> bool:
+        """Check if concept keywords exist in PDF text"""
+        keywords = self.concept_patterns.get(concept, {}).get('keywords', [])
+        return any(keyword in text for keyword in keywords)
+
+    def _extract_relevant_sections(self, content: str, keywords: List[str], max_chars: int) -> str:
+        """Extract most relevant sections from PDF content"""
+        sentences = [s.strip() for s in content.split('.') if len(s.strip()) > 20]
+        scored_sentences = []
+        
+        for sentence in sentences:
+            sentence_lower = sentence.lower()
+            matches = sum(1 for keyword in keywords if keyword in sentence_lower)
+            if matches > 0:
+                scored_sentences.append((matches, sentence))
+        
+        # Sort by relevance and combine
+        scored_sentences.sort(key=lambda x: x[0], reverse=True)
+        
+        result = []
+        char_count = 0
+        for score, sentence in scored_sentences[:3]:  # Top 3 sentences
+            if char_count + len(sentence) > max_chars:
+                break
+            result.append(sentence.strip())
+            char_count += len(sentence)
+        
+        return '. '.join(result) + ('.' if result else '')
+
+    def get_smart_ai_response(self, user_message: str) -> Tuple[str, bool]:
+        """Enhanced AI response with intelligent context building"""
         if not self.groq_client:
             return "", False
         
-        print(f"🤖 Processing with RAG: '{user_message}'")
-        
         try:
-            # Retrieve relevant chunks
-            relevant_chunks = self.retrieve_relevant_chunks(user_message, k=8)
+            # Extract concepts
+            concepts = self.extract_concepts(user_message)
+            print(f"🧠 Detected concepts: {list(concepts.keys())}")
             
-            if not relevant_chunks:
-                print("⚠️ No relevant chunks found, falling back to general knowledge")
-                return self.get_fallback_ai_response(user_message)
+            # Get relevant Q&A matches
+            qa_matches = self.get_contextual_matches(user_message)
             
-            # Build context from retrieved chunks
+            # Get relevant PDF content
+            pdf_content = self.search_pdfs_intelligently(user_message, concepts)
+            
+            # Build context
             context_parts = []
             
-            # Separate PDF and Q&A content
-            pdf_chunks = [(chunk, score) for chunk, score in relevant_chunks if chunk.chunk_type == "pdf"]
-            qa_chunks = [(chunk, score) for chunk, score in relevant_chunks if chunk.chunk_type == "qa"]
+            if pdf_content:
+                context_parts.append(f"ΕΠΙΣΗΜΑ ΕΓΓΡΑΦΑ:\n{pdf_content}")
             
-            # Add PDF context (official documents)
-            if pdf_chunks:
-                pdf_context = "\n\n".join([
-                    f"[Επίσημο έγγραφο: {chunk.source}]\n{chunk.content}"
-                    for chunk, score in pdf_chunks[:4]  # Top 4 PDF chunks
-                ])
-                context_parts.append(f"ΕΠΙΣΗΜΑ ΕΓΓΡΑΦΑ ΚΟΛΛΕΓΙΟΥ:\n{pdf_context}")
-            
-            # Add Q&A context
-            if qa_chunks:
+            if qa_matches:
                 qa_context = "\n\n".join([
-                    f"[Κατηγορία: {chunk.metadata.get('category', 'Άλλα')}]\n{chunk.content}"
-                    for chunk, score in qa_chunks[:4]  # Top 4 Q&A chunks
+                    f"ΕΡΩΤΗΣΗ: {qa['question']}\nΑΠΑΝΤΗΣΗ: {qa['answer']}"
+                    for qa in qa_matches
                 ])
-                context_parts.append(f"ΒΑΣΗ ΓΝΩΣΗΣ Q&A:\n{qa_context}")
+                context_parts.append(f"ΒΑΣΗ ΓΝΩΣΗΣ:\n{qa_context}")
             
-            # Build comprehensive prompt
-            combined_context = "\n\n" + ("="*50 + "\n\n").join(context_parts)
-            
-            full_prompt = f"""ΑΝΑΚΤΗΜΕΝΟ ΠΕΡΙΕΧΟΜΕΝΟ ΑΠΟ ΣΥΣΤΗΜΑ RAG:
+            # Enhanced prompt
+            if context_parts:
+                combined_context = "\n\n" + ("="*40 + "\n\n").join(context_parts)
+                
+                full_prompt = f"""ΔΙΑΘΕΣΙΜΕΣ ΠΛΗΡΟΦΟΡΙΕΣ:
 {combined_context}
 
 ΕΡΩΤΗΣΗ ΦΟΙΤΗΤΗ: {user_message}
 
-ΟΔΗΓΙΕΣ RAG:
-1. Αναλύσε το ανακτημένο περιεχόμενο για σχετικότητα με την ερώτηση
+ΕΝΤΟΠΙΣΜΕΝΕΣ ΕΝΝΟΙΕΣ: {', '.join(concepts.keys()) if concepts else 'Γενική ερώτηση'}
+
+ΟΔΗΓΙΕΣ ΕΞΥΠΝΗΣ ΑΝΑΛΥΣΗΣ:
+1. Αναλύσε την ερώτηση για το τι ζητάει συγκεκριμένα ο φοιτητής
 2. Χρησιμοποίησε πληροφορίες από ΕΠΙΣΗΜΑ ΕΓΓΡΑΦΑ ως κύρια πηγή
-3. Συμπλήρωσε με πληροφορίες από τη ΒΑΣΗ ΓΝΩΣΗΣ Q&A
-4. Συνδύασε τις πληροφορίες για να δώσεις μια ολοκληρωμένη απάντηση
-5. Εστίασε στις πρακτικές συμβουλές και συγκεκριμένα βήματα
-6. Αν χρειάζεται επιβεβαίωση, αναφέρου τον υπεύθυνο
+3. Συμπλήρωσε με πληροφορίες από τη ΒΑΣΗ ΓΝΩΣΗΣ
+4. Συνδύασε με λογικό συμπερασμό όπου χρειάζεται
+5. Δώσε πρακτικές, δομημένες οδηγίες
+6. Αναφέρου αν χρειάζεται επιβεβαίωση από τον υπεύθυνο
 
-ΣΤΡΑΤΗΓΙΚΗ ΑΠΑΝΤΗΣΗΣ:
-- Δώσε άμεση και χρήσιμη απάντηση βασισμένη στο ανακτημένο περιεχόμενο
-- Χρησιμοποίησε δομημένη παρουσίαση με σαφή βήματα
-- Συμπεριέλαβε συγκεκριμένες οδηγίες και πρακτικές συμβουλές
-- Αναφέρου σχετικές προθεσμίες ή απαιτήσεις
+Απάντησε με δομημένο τρόπο και επαγγελματικό τόνο στα ελληνικά."""
+            else:
+                # Fallback prompt with enhanced reasoning
+                full_prompt = f"""ΕΡΩΤΗΣΗ ΦΟΙΤΗΤΗ: {user_message}
 
-Απάντησε στα ελληνικά με επαγγελματικό τόνο."""
+ΠΛΑΙΣΙΟ: Φοιτητής Προπονητικής & Φυσικής Αγωγής, Μητροπολιτικό Κολλέγιο Θεσσαλονίκης
+
+ΕΝΤΟΠΙΣΜΕΝΕΣ ΕΝΝΟΙΕΣ: {', '.join(concepts.keys()) if concepts else 'Γενική ερώτηση'}
+
+ΒΑΣΙΚΕΣ ΠΛΗΡΟΦΟΡΙΕΣ:
+- Απαιτούνται 240 ώρες πρακτικής άσκησης μέχρι 30 Μαΐου
+- Δευτέρα-Σάββατο, μέχρι 8 ώρες/ημέρα
+- Υπεύθυνος: Γεώργιος Σοφιανίδης (gsofianidis@mitropolitiko.edu.gr)
+- Παράδοση συμβάσεων στο Moodle μέχρι 15 Οκτωβρίου
+
+ΟΔΗΓΙΕΣ:
+1. Χρησιμοποίησε γενική γνώση για πρακτική άσκηση στην Ελλάδα
+2. Συσχέτισε με το πλαίσιο του κολλεγίου
+3. Δώσε πρακτικές συμβουλές βασισμένες στις εντοπισμένες έννοιες
+4. Πρότεινε επικοινωνία με υπεύθυνο για επιβεβαίωση
+
+Απάντησε με επαγγελματικό τόνο στα ελληνικά."""
 
             # Call Groq API
             chat_completion = self.groq_client.chat.completions.create(
@@ -517,8 +509,8 @@ class RAGInternshipChatbot:
                     {"role": "user", "content": full_prompt}
                 ],
                 model="llama-3.1-8b-instant",
-                temperature=0.2,  # Lower temperature for more focused responses
-                max_tokens=1200,
+                temperature=0.2,  # Lower for consistency
+                max_tokens=1000,
                 top_p=0.9,
                 stream=False
             )
@@ -527,167 +519,154 @@ class RAGInternshipChatbot:
             
             # Validate Greek characters
             if response and any(ord(char) > 1500 and ord(char) not in range(0x0370, 0x03FF) for char in response):
-                print("⚠️ Detected non-Greek characters in RAG response")
+                print("⚠️ Detected non-Greek characters in response")
                 return "", False
             
-            print("✅ RAG response generated successfully")
+            print("✅ Smart AI response generated successfully")
             return response, True
             
         except Exception as e:
-            print(f"❌ RAG Error: {e}")
+            print(f"❌ Smart AI Error: {e}")
             return "", False
 
-    def get_fallback_ai_response(self, user_message: str) -> Tuple[str, bool]:
-        """Fallback AI response when RAG is not available"""
-        if not self.groq_client:
-            return "", False
-        
-        try:
-            fallback_prompt = f"""ΕΡΩΤΗΣΗ ΦΟΙΤΗΤΗ: {user_message}
-
-ΠΛΑΙΣΙΟ: Φοιτητής Προπονητικής & Φυσικής Αγωγής, Μητροπολιτικό Κολλέγιο Θεσσαλονίκης
-
-ΒΑΣΙΚΕΣ ΠΛΗΡΟΦΟΡΙΕΣ:
-- Απαιτούνται 240 ώρες πρακτικής άσκησης μέχρι 30 Μαΐου
-- Δευτέρα-Σάββατο, μέχρι 8 ώρες/ημέρα  
-- Υπεύθυνος: Γεώργιος Σοφιανίδης (gsofianidis@mitropolitiko.edu.gr)
-- Παράδοση συμβάσεων στο Moodle μέχρι 15 Οκτωβρίου
-
-ΟΔΗΓΙΕΣ:
-1. Χρησιμοποίησε τη γενική σου γνώση για πρακτική άσκηση στην Ελλάδα
-2. Συσχέτισε με το συγκεκριμένο πλαίσιο του κολλεγίου
-3. Δώσε πρακτικές και χρήσιμες συμβουλές
-4. Πρότεινε επικοινωνία με τον υπεύθυνο για επιβεβαίωση
-
-Απάντησε με επαγγελματικό τόνο στα ελληνικά."""
-
-            chat_completion = self.groq_client.chat.completions.create(
-                messages=[
-                    {"role": "system", "content": self.system_prompt},
-                    {"role": "user", "content": fallback_prompt}
-                ],
-                model="llama-3.1-8b-instant",
-                temperature=0.3,
-                max_tokens=800,
-                top_p=0.9,
-                stream=False
-            )
-
-            response = chat_completion.choices[0].message.content
-            
-            if response and any(ord(char) > 1500 and ord(char) not in range(0x0370, 0x03FF) for char in response):
-                print("⚠️ Detected non-Greek characters in fallback response")
-                return "", False
-            
-            return response, True
-            
-        except Exception as e:
-            print(f"❌ Fallback AI Error: {e}")
-            return "", False
-
-    def get_smart_fallback_response(self, question: str) -> str:
-        """Smart fallback response when AI is not available"""
+    def get_concept_based_fallback(self, question: str) -> str:
+        """Enhanced concept-based smart fallback"""
+        concepts = self.extract_concepts(question)
         question_lower = question.lower()
         
-        # Enhanced concept-based responses
-        if any(keyword in question_lower for keyword in ['σύλλογο', 'σύλλογος', 'γυμναστήριο', 'δομή', 'φορέα']):
-            return """ΔΟΜΕΣ ΠΡΑΚΤΙΚΗΣ ΑΣΚΗΣΗΣ:
+        # Prioritize concepts by strength
+        top_concept = max(concepts.items(), key=lambda x: x[1])[0] if concepts else None
+        
+        if top_concept == 'facilities' or any(keyword in question_lower for keyword in ['σύλλογο', 'γυμναστήριο', 'δομή', 'φορέα']):
+            return """ΕΓΚΕΚΡΙΜΕΝΕΣ ΔΟΜΕΣ ΠΡΑΚΤΙΚΗΣ ΑΣΚΗΣΗΣ:
 
+🏃‍♂️ ΑΘΛΗΤΙΚΕΣ ΕΓΚΑΤΑΣΤΑΣΕΙΣ:
 • Αθλητικούς συλλόγους όλων των αθλημάτων
 • Γυμναστήρια και fitness centers
-• Κολυμβητήρια  
+• Κολυμβητήρια
 • Ακαδημίες αθλητισμού
 • Personal training studios
 • Κέντρα αποκατάστασης
+
+🏛️ ΔΗΜΟΣΙΟΙ ΦΟΡΕΙΣ:
+• Δημόσιους αθλητικούς οργανισμούς
 • Σχολεία με τμήμα φυσικής αγωγής
 
-ΠΡΟΫΠΟΘΕΣΕΙΣ:
+✅ ΠΡΟΫΠΟΘΕΣΕΙΣ:
 • Νόμιμη λειτουργία και ΑΦΜ
-• Εκπαιδευτής με κατάλληλα προσόντα  
+• Εκπαιδευτής με κατάλληλα προσόντα
 • Δυνατότητα καθοδήγησης
 
-Για έγκριση δομής: gsofianidis@mitropolitiko.edu.gr"""
+ΕΓΚΡΙΣΗ ΔΟΜΗΣ: gsofianidis@mitropolitiko.edu.gr"""
 
-        elif any(keyword in question_lower for keyword in ['έγγραφα', 'χαρτιά', 'διαδικασία', 'αίτηση']):
-            return """ΑΠΑΙΤΟΥΜΕΝΑ ΕΓΓΡΑΦΑ:
+        elif top_concept == 'documents' or any(keyword in question_lower for keyword in ['έγγραφα', 'χαρτιά', 'διαδικασία']):
+            return """ΑΠΑΙΤΟΥΜΕΝΑ ΕΓΓΡΑΦΑ ΠΡΑΚΤΙΚΗΣ:
 
-ΓΙΑ ΤΟΝ ΦΟΙΤΗΤΗ:
+📋 ΓΙΑ ΤΟΝ ΦΟΙΤΗΤΗ:
 • Αίτηση πραγματοποίησης πρακτικής άσκησης
 • Στοιχεία φοιτητή (συμπληρωμένη φόρμα)
 • Ασφαλιστική ικανότητα από gov.gr
 • Υπεύθυνη δήλωση (μη λήψη επιδόματος)
 
-ΓΙΑ ΤΗ ΔΟΜΗ:
+🏢 ΓΙΑ ΤΗ ΔΟΜΗ:
 • Στοιχεία φορέα (ΑΦΜ, διεύθυνση, εκπρόσωπος)
 • Ημέρες και ώρες δεκτότητας
 
-⚠️ ΣΗΜΑΝΤΙΚΟ: Ξεκινήστε από την ασφαλιστική ικανότητα!
+⚠️ ΣΗΜΑΝΤΙΚΟ:
+Ξεκινήστε από την ασφαλιστική ικανότητα - χρειάζεται χρόνο!
 
-Επικοινωνία: gsofianidis@mitropolitiko.edu.gr"""
+ΠΗΓΗ: Moodle SE5117
+ΕΠΙΚΟΙΝΩΝΙΑ: gsofianidis@mitropolitiko.edu.gr"""
 
-        elif any(keyword in question_lower for keyword in ['ώρες', 'χρόνος', 'προθεσμία', '240']):
-            return """ΧΡΟΝΟΔΙΑΓΡΑΜΜΑ:
+        elif top_concept == 'time' or any(keyword in question_lower for keyword in ['ώρες', 'χρόνος', 'προθεσμία']):
+            return """ΧΡΟΝΙΚΕΣ ΑΠΑΙΤΗΣΕΙΣ ΠΡΑΚΤΙΚΗΣ:
 
-Απαιτούμενες ώρες: 240 ώρες
-Προθεσμία: 30 Μαΐου
+⏱️ ΣΥΝΟΛΙΚΕΣ ΩΡΕΣ: 240 ώρες (υποχρεωτικό)
+📅 ΠΡΟΘΕΣΜΙΑ: 30 Μαΐου
 
-ΚΑΝΟΝΕΣ ΩΡΑΡΙΟΥ:
+📆 ΚΑΝΟΝΕΣ ΩΡΑΡΙΟΥ:
 • Δευτέρα-Σάββατο (όχι Κυριακές)
 • Μέχρι 8 ώρες/ημέρα
 • 5 ημέρες/εβδομάδα
 
-ΠΑΡΑΔΕΙΓΜΑΤΑ:
+📊 ΠΑΡΑΔΕΙΓΜΑΤΑ ΠΡΟΓΡΑΜΜΑΤΙΣΜΟΥ:
 • 6 εβδομάδες × 40 ώρες
-• 8 εβδομάδες × 30 ώρες  
+• 8 εβδομάδες × 30 ώρες
+• 10 εβδομάδες × 24 ώρες
 
-Για προσαρμογή: gsofianidis@mitropolitiko.edu.gr"""
+ΠΡΟΓΡΑΜΜΑΤΙΣΜΟΣ: gsofianidis@mitropolitiko.edu.gr"""
+
+        elif top_concept == 'contact' or any(keyword in question_lower for keyword in ['επικοινωνία', 'υπεύθυνος']):
+            return """ΣΤΟΙΧΕΙΑ ΕΠΙΚΟΙΝΩΝΙΑΣ:
+
+👨‍🏫 ΚΥΡΙΑ ΕΠΙΚΟΙΝΩΝΙΑ:
+Γεώργιος Σοφιανίδης, MSc, PhD(c)
+📧 gsofianidis@mitropolitiko.edu.gr
+🏷️ Υπεύθυνος Πρακτικής Άσκησης
+
+👨‍💼 ΕΝΑΛΛΑΚΤΙΚΗ ΕΠΙΚΟΙΝΩΝΙΑ:
+Γεώργιος Μπουχουράς, MSc, PhD
+📧 gbouchouras@mitropolitiko.edu.gr
+📞 2314 409000
+🏷️ Programme Leader
+
+📋 ΚΑΤΗΓΟΡΙΟΠΟΙΗΣΗ:
+• Θέματα πρακτικής ➜ Γεώργιος Σοφιανίδης
+• Τεχνικά προβλήματα ➜ Γεώργιος Μπουχουράς"""
 
         else:
-            return f"""Δεν βρέθηκε συγκεκριμένη απάντηση.
+            return f"""Δεν βρέθηκε συγκεκριμένη απάντηση για αυτή την ερώτηση.
 
 ΠΡΟΤΕΙΝΟΜΕΝΕΣ ΕΝΕΡΓΕΙΕΣ:
 • Διατυπώστε την ερώτηση πιο συγκεκριμένα
-• Επιλέξτε από τις συχνές ερωτήσεις
-• Επικοινωνήστε με τον υπεύθυνο
+• Επιλέξτε από τις συχνές ερωτήσεις στο μενού
+• Επικοινωνήστε απευθείας με τον υπεύθυνο
 
 ΕΠΙΚΟΙΝΩΝΙΑ:
 📧 gsofianidis@mitropolitiko.edu.gr
 📞 2314 409000
 
-Για άμεση βοήθεια, περιγράψτε τη συγκεκριμένη απορία."""
+Για άμεση βοήθεια, περιγράψτε τη συγκεκριμένη απορία σας."""
 
     def get_response(self, question: str) -> str:
-        """Main response method using RAG-first approach"""
+        """Main response method - optimized for memory efficiency"""
         if not self.qa_data:
             return "Δεν υπάρχουν διαθέσιμα δεδομένα γνώσης."
         
-        print(f"\n🤖 Processing question with RAG: '{question}'")
+        print(f"\n🤖 Processing question: '{question}'")
         
-        # RAG-first approach
-        if self.rag_initialized and self.faiss_index is not None:
-            print("🧠 Step 1: RAG semantic search...")
-            response, success = self.get_rag_response(question)
+        # Step 1: Check for high-similarity direct matches
+        print("📋 Step 1: Checking for direct matches...")
+        best_match = max(self.qa_data, key=lambda x: self.enhanced_similarity_calculation(question, x))
+        similarity = self.enhanced_similarity_calculation(question, best_match)
+        
+        if similarity > 0.4:  # High confidence threshold
+            print(f"✅ High similarity match found (score: {similarity:.3f})")
+            return best_match['answer']
+        
+        # Step 2: Enhanced AI processing with context
+        print("🧠 Step 2: Enhanced AI processing...")
+        if self.groq_client:
+            response, success = self.get_smart_ai_response(question)
             if success and response.strip():
-                print("✅ RAG response successful")
+                print("✅ Smart AI response successful")
                 return response
             else:
-                print("⚠️ RAG failed, trying fallback AI...")
+                print("⚠️ AI processing failed")
         else:
-            print("⚠️ RAG not available, using fallback AI...")
+            print("⚠️ AI not available")
         
-        # Fallback to AI without RAG
-        if self.groq_client:
-            response, success = self.get_fallback_ai_response(question)
-            if success and response.strip():
-                print("✅ Fallback AI response successful")
-                return response
-        
-        # Final fallback to smart responses
-        print("📋 Using smart fallback response...")
-        return self.get_smart_fallback_response(question)
+        # Step 3: Concept-based intelligent fallback
+        print("📋 Step 3: Using intelligent fallback...")
+        if similarity > 0.15:  # Medium confidence
+            print(f"🟡 Medium similarity fallback (score: {similarity:.3f})")
+            return best_match['answer']
+        else:
+            print("🔄 Using concept-based smart fallback")
+            return self.get_concept_based_fallback(question)
 
 def main():
-    """Main Streamlit application with RAG-powered intelligence"""
+    """Main Streamlit application - Optimized for Community Cloud"""
     
     # Enhanced Responsive CSS Styling
     st.markdown("""
@@ -788,14 +767,14 @@ def main():
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     
-    .rag-status {
-        background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
-        animation: gradientShift 3s ease-in-out infinite;
+    .optimized-status {
+        background: linear-gradient(45deg, #4ecdc4, #44a08d);
+        animation: pulse 2s ease-in-out infinite;
     }
     
-    @keyframes gradientShift {
-        0%, 100% { background: linear-gradient(45deg, #ff6b6b, #4ecdc4); }
-        50% { background: linear-gradient(45deg, #4ecdc4, #45b7d1); }
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.8; }
     }
     
     .chat-container {
@@ -966,7 +945,7 @@ def main():
         <div class="header-content">
             <h1>Πρακτική Άσκηση</h1>
             <h3>Μητροπολιτικό Κολλέγιο - Τμήμα Προπονητικής & Φυσικής Αγωγής</h3>
-            <p><em>🧠 RAG-Powered AI Assistant με Σημασιολογική Αναζήτηση</em></p>
+            <p><em>🧠 Memory-Optimized Smart Assistant για Community Cloud</em></p>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -983,8 +962,7 @@ def main():
         except:
             pass
         
-        with st.spinner("🔄 Initializing RAG system..."):
-            st.session_state.chatbot = RAGInternshipChatbot(groq_api_key)
+        st.session_state.chatbot = OptimizedInternshipChatbot(groq_api_key)
     else:
         # Refresh data if needed
         current_data_count = len(st.session_state.chatbot.qa_data)
@@ -993,10 +971,6 @@ def main():
         
         if new_data_count != current_data_count:
             st.toast(f"📊 Data updated: {new_data_count} entries")
-            # Rebuild RAG database if needed
-            if st.session_state.chatbot.rag_initialized:
-                with st.spinner("🔄 Rebuilding RAG database..."):
-                    st.session_state.chatbot.build_rag_database()
 
     # Quick info cards
     st.markdown("### 📊 Σημαντικές Πληροφορίες")
@@ -1030,27 +1004,22 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
-    # RAG Status Indicator
-    if st.session_state.chatbot.rag_initialized and st.session_state.chatbot.faiss_index is not None:
-        chunks_count = len(st.session_state.chatbot.document_chunks)
-        st.markdown(f'<div class="api-status rag-status">🧠 RAG Active ({chunks_count} chunks)</div>', unsafe_allow_html=True)
-    elif st.session_state.chatbot.groq_client:
-        st.markdown('<div class="api-status">🤖 AI Mode</div>', unsafe_allow_html=True)
+    # Optimized Status Indicator
+    if st.session_state.chatbot.groq_client:
+        st.markdown('<div class="api-status optimized-status">🧠 Smart Mode (Optimized)</div>', unsafe_allow_html=True)
     else:
-        st.markdown('<div class="api-status" style="background: #ffc107;">📋 Basic Mode</div>', unsafe_allow_html=True)
+        st.markdown('<div class="api-status" style="background: #ffc107; color: #000;">📋 Concept Mode</div>', unsafe_allow_html=True)
 
     # Enhanced status information
-    if st.session_state.chatbot.rag_initialized:
-        status_text = f"RAG Semantic Search → AI Generation → Smart Fallback ({len(st.session_state.chatbot.document_chunks)} chunks)"
-    elif st.session_state.chatbot.groq_client:
-        status_text = "AI Generation → Smart Fallback"
+    if st.session_state.chatbot.groq_client:
+        status_text = "Smart Matching → Enhanced AI → Concept Fallback"
     else:
-        status_text = "Smart Concept-Based Responses"
+        status_text = "Smart Matching → Concept-Based Responses"
     
     st.markdown(f"""
     <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 0.6rem; margin-bottom: 1.5rem; text-align: center; font-size: 0.9rem;">
-        <strong>🧠 RAG-Powered Assistant:</strong> Χρησιμοποιεί σημασιολογική αναζήτηση για βαθύτερη κατανόηση<br>
-        <small>🔄 Architecture: {status_text}</small>
+        <strong>🧠 Memory-Optimized Smart Assistant:</strong> Βελτιστοποιημένο για Streamlit Community Cloud<br>
+        <small>🔄 Logic: {status_text}</small>
     </div>
     """, unsafe_allow_html=True)
 
@@ -1093,26 +1062,19 @@ def main():
 
         st.markdown("---")
 
-        # Enhanced RAG Status
-        if st.session_state.chatbot.rag_initialized:
-            if st.session_state.chatbot.faiss_index is not None:
-                st.success("🧠 RAG System Active")
-                chunks = len(st.session_state.chatbot.document_chunks)
-                st.info(f"Semantic search across {chunks} document chunks")
-                
-                # RAG Statistics
-                qa_chunks = sum(1 for chunk in st.session_state.chatbot.document_chunks if chunk.chunk_type == "qa")
-                pdf_chunks = sum(1 for chunk in st.session_state.chatbot.document_chunks if chunk.chunk_type == "pdf")
-                st.write(f"📋 Q&A chunks: {qa_chunks}")
-                st.write(f"📄 PDF chunks: {pdf_chunks}")
-            else:
-                st.warning("🧠 RAG Initialized but Database Missing")
+        # System Status
+        if st.session_state.chatbot.groq_client:
+            st.success("🧠 Smart AI Mode Active")
+            st.info("Enhanced concept analysis + AI reasoning")
         else:
-            if RAG_AVAILABLE:
-                st.warning("🧠 RAG Libraries Available but Not Initialized")
+            st.warning("📋 Concept-Based Mode")
+            if GROQ_AVAILABLE:
+                st.info("For AI enhancement, add Groq API key")
             else:
-                st.error("⚠️ RAG Libraries Not Available")
-                st.info("Install: pip install sentence-transformers faiss-cpu")
+                st.error("Groq library not available")
+
+        # Memory optimization notice
+        st.info("⚡ Optimized for Community Cloud memory limits")
 
         st.markdown("---")
 
@@ -1120,56 +1082,45 @@ def main():
             st.session_state.messages = []
             st.rerun()
 
-        # Enhanced Technical Information
-        with st.expander("🔧 RAG System Details"):
-            st.markdown("**For technical issues:**")
+        # Technical Information
+        with st.expander("🔧 System Details"):
+            st.markdown("**Technical Support:**")
             st.markdown("📧 gbouchouras@mitropolitiko.edu.gr")
             
-            st.write("**RAG System Status:**")
-            st.write("• RAG Libraries:", RAG_AVAILABLE)
-            st.write("• RAG Initialized:", st.session_state.chatbot.rag_initialized)
-            st.write("• Vector Database:", st.session_state.chatbot.faiss_index is not None)
-            st.write("• Embedding Model:", "paraphrase-multilingual-MiniLM-L12-v2" if st.session_state.chatbot.rag_initialized else "None")
+            st.write("**Optimized System Status:**")
+            st.write("• Memory Mode: Community Cloud Optimized ✅")
+            st.write("• Enhanced Concept Analysis: Active ✅")
+            st.write("• Smart Similarity Matching: Active ✅")
             st.write("• Groq Available:", GROQ_AVAILABLE)
             st.write("• Groq Client:", st.session_state.chatbot.groq_client is not None)
             st.write("• PDF Available:", PDF_AVAILABLE)
+            st.write("• RAG Libraries:", RAG_AVAILABLE, "(Not used for memory optimization)")
             
-            if st.session_state.chatbot.rag_initialized:
-                st.write("**Document Chunks:**")
-                st.write(f"• Total chunks: {len(st.session_state.chatbot.document_chunks)}")
-                
-                chunk_types = {}
-                for chunk in st.session_state.chatbot.document_chunks:
-                    chunk_types[chunk.chunk_type] = chunk_types.get(chunk.chunk_type, 0) + 1
-                
-                for chunk_type, count in chunk_types.items():
-                    st.write(f"• {chunk_type.upper()} chunks: {count}")
-                
-                # RAG Test
-                st.subheader("🧠 RAG Retrieval Test")
-                test_query = st.text_input("Test RAG query:", placeholder="Τι έγγραφα χρειάζομαι;")
-                if test_query:
-                    relevant_chunks = st.session_state.chatbot.retrieve_relevant_chunks(test_query, k=3)
-                    if relevant_chunks:
-                        st.write("**Retrieved chunks:**")
-                        for i, (chunk, score) in enumerate(relevant_chunks):
-                            st.write(f"**Chunk {i+1}** (score: {score:.3f}) - {chunk.source}")
-                            st.write(f"Type: {chunk.chunk_type}")
-                            st.write(f"Content preview: {chunk.content[:200]}...")
-                            st.markdown("---")
-                    else:
-                        st.write("No relevant chunks found")
-            
-            # Enhanced file status
-            qa_file_exists = os.path.exists("qa_data.json")
             st.write("**Data Sources:**")
-            st.write("• qa_data.json exists:", qa_file_exists)
             st.write("• QA Data Count:", len(st.session_state.chatbot.qa_data))
+            st.write("• PDF Files:", len(st.session_state.chatbot.pdf_files))
+            cached_pdfs = len(st.session_state.chatbot.pdf_cache)
+            st.write(f"• Cached PDFs: {cached_pdfs}/{len(st.session_state.chatbot.pdf_files)}")
             
-            if PDF_AVAILABLE:
-                st.write("• PDF Files:", len(st.session_state.chatbot.pdf_files))
-                cached_pdfs = len(st.session_state.chatbot.pdf_cache)
-                st.write(f"• Cached PDFs: {cached_pdfs}/{len(st.session_state.chatbot.pdf_files)}")
+            # Concept analysis test
+            st.subheader("🧠 Concept Analysis Test")
+            test_question = st.text_input("Test concept detection:", placeholder="Τι έγγραφα χρειάζομαι;")
+            if test_question:
+                concepts = st.session_state.chatbot.extract_concepts(test_question)
+                if concepts:
+                    st.write("**Detected Concepts:**")
+                    for concept, strength in concepts.items():
+                        st.write(f"• {concept}: {strength:.3f}")
+                else:
+                    st.write("No specific concepts detected")
+                
+                # Test similarity
+                if st.session_state.chatbot.qa_data:
+                    best_match = max(st.session_state.chatbot.qa_data, 
+                                   key=lambda x: st.session_state.chatbot.enhanced_similarity_calculation(test_question, x))
+                    similarity = st.session_state.chatbot.enhanced_similarity_calculation(test_question, best_match)
+                    st.write(f"**Best match similarity:** {similarity:.3f}")
+                    st.write(f"**Would use:** {'Direct match' if similarity > 0.4 else 'AI enhancement' if similarity > 0.15 else 'Concept fallback'}")
 
     # Chat interface
     st.markdown('<div class="chat-container">', unsafe_allow_html=True)
@@ -1181,10 +1132,7 @@ def main():
             st.markdown(f'<div class="user-message"><strong>Εσείς:</strong> {message["content"]}</div>', unsafe_allow_html=True)
         else:
             content = message["content"].replace('\n', '<br>')
-            if st.session_state.chatbot.rag_initialized:
-                assistant_name = "🧠 RAG Assistant"
-            else:
-                assistant_name = "🤖 Smart Assistant"
+            assistant_name = "🧠 Smart Assistant" if st.session_state.chatbot.groq_client else "📋 Concept Assistant"
             st.markdown(f'<div class="ai-message"><strong>{assistant_name}:</strong><br><br>{content}</div>', unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
@@ -1195,7 +1143,7 @@ def main():
     if user_input:
         st.session_state.messages.append({"role": "user", "content": user_input})
         
-        spinner_text = "Performing semantic search and generating response..." if st.session_state.chatbot.rag_initialized else "Generating intelligent response..."
+        spinner_text = "Αναλύω με έξυπνους αλγορίθμους..." if st.session_state.chatbot.groq_client else "Αναλύω με έννοιες..."
         
         with st.spinner(spinner_text):
             try:
@@ -1208,22 +1156,17 @@ def main():
         st.rerun()
 
     # Footer
-    if st.session_state.chatbot.rag_initialized:
-        footer_text = "RAG-Powered Semantic Search Assistant"
-    elif st.session_state.chatbot.groq_client:
-        footer_text = "AI-Enhanced Smart Assistant"
-    else:
-        footer_text = "Concept-Based Smart Assistant"
-    
+    footer_text = "Memory-Optimized Smart Assistant" if st.session_state.chatbot.groq_client else "Enhanced Concept-Based Assistant"
     st.markdown(f"""
     <div style="text-align: center; color: #6c757d; padding: 1rem; font-size: 0.9rem;">
         <small>
             🎓 <strong>Μητροπολιτικό Κολλέγιο Θεσσαλονίκης</strong> | 
             Τμήμα Προπονητικής & Φυσικής Αγωγής<br>
-            <em>{footer_text}</em>
+            <em>{footer_text}</em><br>
+            <em>⚡ Optimized for Streamlit Community Cloud</em>
         </small>
     </div>
     """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
-    main()
+    main()    main()
