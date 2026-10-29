@@ -1,6 +1,6 @@
 // Search only the curated knowledge base; never invent an answer.
 export const normalize = value => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/ς/g, 'σ').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-const stop = new Set(normalize('τι πως που ποιο ποιος ποια ποιες ποιοι ποιον ποιας πότε μπορω μπορει μπορουμε να σε για την τη το τον τα του της τους τις των μου με μας και η ο οι ενα μια εναν απο ως αν δεν εχω ειναι θα πρεπει κανω κανει κανετε χρειαζομαι χρειάζεται παιρνω γινεται σχετικα πρακτικη ασκηση').split(' '));
+const stop = new Set(normalize('τι πως που ποιο ποιος ποια ποιες ποιοι ποιον ποιας πότε μπορω μπορει μπορουμε να σε για την τη το τον τα του της τους τις των μου με μας και η ο οι ενα μια εναν απο ως αν δεν εχω ειναι θα πρεπει κανω κανει κανετε χρειαζομαι χρειάζεται παιρνω γινεται σχετικα πρακτικη πρακτικης ασκηση ασκησης').split(' '));
 const groups = [
  ['ωρα','ωρες','ωρων'], ['εγγραφα','εγγραφο','εγγραφων','δικαιολογητικα','χαρτια'],
  ['αμοιβη','αμοιβης','πληρωμη','πληρωνομαι','μισθο','μισθος','λεφτα','χρηματα'],
@@ -13,9 +13,33 @@ const groups = [
 ];
 const aliases = new Map(groups.flatMap(group => group.map(word => [normalize(word), normalize(group[0])])));
 export function tokens(value) { return [...new Set(normalize(value).split(' ').filter(word => word && !stop.has(word)).map(word => aliases.get(word) || word))]; }
+// Accept one missing, extra, mistyped or transposed letter in longer words.
+// Correct only when all nearest spellings have the same meaning; leave unknown
+// topics untouched rather than turning unrelated queries into confident answers.
+function oneEditApart(a, b) {
+  if (Math.abs(a.length-b.length)>1) return false;
+  if (a.length===b.length) {
+    const differences=[];
+    for(let i=0;i<a.length;i++) if(a[i]!==b[i]) differences.push(i);
+    return differences.length===1 || (differences.length===2 && differences[1]===differences[0]+1 && a[differences[0]]===b[differences[1]] && a[differences[1]]===b[differences[0]]);
+  }
+  const shorter=a.length<b.length?a:b, longer=a.length<b.length?b:a;
+  let i=0;while(i<shorter.length && shorter[i]===longer[i]) i++;
+  return shorter.slice(i)===longer.slice(i+1);
+}
+function queryTokens(question, data) {
+  const vocabulary=new Set([...stop,...aliases.keys(),...data.flatMap(entry=>normalize([entry.question,entry.category,...entry.keywords].join(' ')).split(' '))]);
+  const words=normalize(question).split(' ').map(word=>{
+    if(word.length<5 || vocabulary.has(word)) return word;
+    const alternatives=[...vocabulary].filter(candidate=>candidate.length>=5 && oneEditApart(word,candidate));
+    const meanings=new Set(alternatives.map(candidate=>stop.has(candidate)?'':aliases.get(candidate)||candidate));
+    return meanings.size===1 ? [...meanings][0] : word;
+  });
+  return tokens(words.join(' '));
+}
 function match(word, list) { return list.some(other => word === other || (Math.min(word.length, other.length) >= 6 && word.slice(0, -2) === other.slice(0, -2))); }
 export function rankQuestions(question, data) {
-  const query = tokens(question);
+  const query = queryTokens(question, data);
   const indexed = data.map(entry => ({entry, title:tokens(entry.question), keys:tokens((entry.keywords || []).join(' ')), category:tokens(entry.category)}));
   return indexed.map(item => {
     if (normalize(question) === normalize(item.entry.question)) return {entry:item.entry, score:1};

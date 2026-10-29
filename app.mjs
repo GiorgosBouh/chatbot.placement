@@ -1,4 +1,4 @@
-import {findAnswer} from './search.mjs';
+import {findAnswer} from './search.mjs?v=2';
 const $ = id => document.getElementById(id);
 let data = [];
 function message(role, content, source) {
