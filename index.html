@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="el">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Οδηγός πρακτικής άσκησης για φοιτητές Προπονητικής και Φυσικής Αγωγής του Μητροπολιτικού Κολλεγίου Θεσσαλονίκης.">
+  <meta name="theme-color" content="#123c35">
+  <title>Πρακτική Άσκηση · Οδηγός Φοιτητή</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.mjs"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./"><span class="brand-icon" aria-hidden="true">Π</span><span>Μητροπολιτικό Κολλέγιο<small>Θεσσαλονίκη · Προπονητική & Φυσική Αγωγή</small></span></a>
+    <a class="contact" href="mailto:gsofianidis@mitropolitiko.edu.gr">Επικοινωνία με υπεύθυνο ↗</a>
+  </header>
+  <main>
+    <section class="intro" aria-labelledby="title">
+      <p class="eyebrow">SPORTS COACHING PRACTICE · SE5117</p>
+      <h1 id="title">Το επόμενο βήμα σου,<br><span>με ξεκάθαρες απαντήσεις.</span></h1>
+      <p class="lead">Όσα χρειάζεσαι για την πρακτική σου άσκηση, από τα πρώτα δικαιολογητικά μέχρι την ολοκλήρωση.</p>
+      <div class="facts" aria-label="Βασικές πληροφορίες">
+        <div><strong>240</strong><span>ώρες πρακτικής</span></div>
+        <div><strong>Έως 8</strong><span>ώρες ανά ημέρα</span></div>
+        <div><strong>Δευ – Σάβ</strong><span>επιτρεπόμενες ημέρες</span></div>
+      </div>
+    </section>
+    <div class="workspace">
+      <section class="chat-panel" aria-labelledby="chat-title">
+        <div class="panel-heading"><div><p class="eyebrow">Ο ΟΔΗΓΟΣ ΣΟΥ</p><h2 id="chat-title">Ρώτησε για την πρακτική</h2></div><button id="clear" class="quiet" type="button">Νέα συνομιλία</button></div>
+        <p id="status" class="status" role="status">Φόρτωση βάσης γνώσης…</p>
+        <div id="messages" class="messages" role="log" aria-label="Συνομιλία" aria-live="polite" aria-relevant="additions"></div>
+        <div class="suggestions" aria-label="Προτεινόμενες ερωτήσεις">
+          <button type="button" data-question="Πώς ξεκινάω την πρακτική μου άσκηση;" disabled>Πώς ξεκινάω; ↗</button>
+          <button type="button" data-question="Τι έγγραφα χρειάζομαι;" disabled>Δικαιολογητικά ↗</button>
+          <button type="button" data-question="Παίρνω αμοιβή;" disabled>Αμοιβή ↗</button>
+        </div>
+        <form id="question-form">
+          <label class="sr-only" for="question">Η ερώτησή σου</label>
+          <input id="question" name="question" placeholder="Γράψε την ερώτησή σου…" maxlength="1000" autocomplete="off" required disabled>
+          <button id="send" type="submit" aria-label="Αποστολή ερώτησης" disabled>↑</button>
+        </form>
+        <p class="privacy">Οι ερωτήσεις παραμένουν σε αυτή τη σελίδα. Δεν αποθηκεύονται και δεν αποστέλλονται σε υπηρεσία AI.</p>
+        <noscript><p>Ενεργοποίησε τη JavaScript για να χρησιμοποιήσεις τον οδηγό ερωτήσεων.</p></noscript>
+      </section>
+      <aside class="resources">
+        <section class="faq-panel" aria-labelledby="faq-title">
+          <p class="eyebrow">ΒΡΕΣ ΑΠΑΝΤΗΣΗ</p><h2 id="faq-title">Συχνές ερωτήσεις</h2>
+          <label for="category">Θεματική ενότητα</label><select id="category" disabled><option value="">Όλες οι ενότητες</option></select>
+          <div id="faq-list" class="faq-list"></div>
+        </section>
+        <section class="help-card"><span aria-hidden="true">↗</span><h2>Χρειάζεσαι διευκρίνιση;</h2><p>Για έγκριση φορέα, προθεσμίες και προσωπικές υποθέσεις, επικοινώνησε με τον υπεύθυνο.</p><strong>Γεώργιος Σοφιανίδης</strong><a href="mailto:gsofianidis@mitropolitiko.edu.gr">gsofianidis@mitropolitiko.edu.gr</a><a href="tel:+302314409000">2314 409000</a></section>
+      </aside>
+    </div>
+    <p class="notice">Ο οδηγός χρησιμοποιεί την υπάρχουσα βάση γνώσης του μαθήματος. Επιβεβαίωσε τις ημερομηνίες και τις απαιτήσεις για το τρέχον ακαδημαϊκό έτος στο Moodle ή με τον υπεύθυνο. Η υποβολή εγγράφων γίνεται στις επίσημες πλατφόρμες του κολλεγίου.</p>
+  </main>
+  <footer><span>Πρακτική Άσκηση · SE5117</span><a href="https://github.com/GiorgosBouh/chatbot.placement">Κώδικας & βάση γνώσης ↗</a></footer>
+</body>
+</html>
