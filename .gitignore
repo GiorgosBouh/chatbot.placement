@@ -3,3 +3,8 @@ __pycache__/
 .venv/
 .streamlit/secrets.toml
 .DS_Store
+.env
+.env.local
+llm-backend/.sites-runtime/
+llm-backend/dist/
+llm-backend/site.tar.gz
