@@ -1,5 +1,5 @@
 import {selectKnowledge} from './context.mjs';
-import {needsFrameworkClarification} from './search.mjs';
+const containsAmbiguousFrameworkTerm=value=>String(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('el-GR').split(/[^\p{L}\p{N}]+/u).some(word=>word.startsWith('πλαισι'));
 const ALLOWED_ORIGIN = 'https://giorgosbouh.github.io';
 const ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
 const SYSTEM = `Είσαι ο βοηθός πρακτικής άσκησης SE5117 του Μητροπολιτικού Κολλεγίου. Απαντάς στα ελληνικά, σύντομα και πρακτικά. Υποστηρίζεις διευκρινιστικές ερωτήσεις μέσα στη συνομιλία.
@@ -45,7 +45,7 @@ export function createHandler(knowledge, rank) {
     try {const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}body=JSON.parse(new TextDecoder().decode(bytes));}catch{return reply({error:'invalid_json'},400);}
     if(!Array.isArray(body?.messages)||body.messages.length<1||body.messages.length>8||body.messages.some(message=>!['user','assistant'].includes(message?.role)||typeof message.content!=='string'||!message.content.trim()||message.content.length>1500)||body.messages.at(-1).role!=='user'||body.messages.reduce((n,m)=>n+m.content.length,0)>6000) return reply({error:'invalid_messages'},400);
     const latestUser=body.messages.filter(message=>message.role==='user').at(-1)?.content||'';
-    if(needsFrameworkClarification(latestUser)) return reply({answer:'Όταν λες «πλαίσια», εννοείς τους φορείς/δομές όπου μπορείς να πραγματοποιήσεις πρακτική άσκηση ή κάτι άλλο;',mode:'clarification',sources:[]});
+    if(containsAmbiguousFrameworkTerm(latestUser)) return reply({answer:'Όταν λες «πλαίσια», εννοείς τους φορείς/δομές όπου μπορείς να πραγματοποιήσεις πρακτική άσκηση ή κάτι άλλο;',mode:'clarification',sources:[]});
     if(!env.GROQ_API_KEY) return reply({error:'not_configured'},503);
     if(!quota(request)) return reply({error:'rate_limited'},429,{'Retry-After':'60'});
     const entries=selectKnowledge(body.messages,knowledge,rank);
