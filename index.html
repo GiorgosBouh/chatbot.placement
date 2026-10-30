@@ -3,16 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Οδηγός πρακτικής άσκησης για φοιτητές Προπονητικής και Φυσικής Αγωγής του Μητροπολιτικού Κολλεγίου Θεσσαλονίκης.">
+  <meta name="description" content="Οδηγός πρακτικής άσκησης του Μητροπολιτικού Κολλεγίου με πληροφορίες και υπεύθυνο επικοινωνίας ανά campus.">
   <meta name="theme-color" content="#123c35">
   <title>Πρακτική Άσκηση · Οδηγός Φοιτητή</title>
   <link rel="stylesheet" href="./styles.css">
-  <script type="module" src="./app.mjs?v=8"></script>
+  <script type="module" src="./app.mjs?v=9"></script>
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="./"><span class="brand-icon" aria-hidden="true">Π</span><span>Μητροπολιτικό Κολλέγιο<small>Θεσσαλονίκη · Προπονητική & Φυσική Αγωγή</small></span></a>
-    <a class="contact" href="mailto:gsofianidis@mitropolitiko.edu.gr">Επικοινωνία με υπεύθυνο ↗</a>
+    <a class="brand" href="./"><span class="brand-icon" aria-hidden="true">Π</span><span>Μητροπολιτικό Κολλέγιο<small>Οδηγός πρακτικής · Όλα τα campus</small></span></a>
+    <a class="contact" href="#campus-contact">Στοιχεία υπευθύνου ↗</a>
   </header>
   <main>
     <section class="intro" aria-labelledby="title">
@@ -28,6 +28,7 @@
     <div class="workspace">
       <section class="chat-panel" aria-labelledby="chat-title">
         <div class="panel-heading"><div><p class="eyebrow">Ο ΟΔΗΓΟΣ ΣΟΥ</p><h2 id="chat-title">Ρώτησε για την πρακτική</h2></div><button id="clear" class="quiet" type="button">Νέα συνομιλία</button></div>
+        <div class="campus-picker"><label for="campus">Campus πρακτικής</label><select id="campus"><option value="">Επίλεξε campus για εξατομικευμένες απαντήσεις</option></select></div>
         <p id="status" class="status" role="status">Φόρτωση βάσης γνώσης…</p>
         <div id="messages" class="messages" role="log" aria-label="Συνομιλία" aria-live="polite" aria-relevant="additions"></div>
         <div class="suggestions" aria-label="Προτεινόμενες ερωτήσεις">
@@ -49,7 +50,7 @@
           <label for="category">Θεματική ενότητα</label><select id="category" disabled><option value="">Όλες οι ενότητες</option></select>
           <div id="faq-list" class="faq-list"></div>
         </section>
-        <section class="help-card"><span aria-hidden="true">↗</span><h2>Χρειάζεσαι διευκρίνιση;</h2><p>Για έγκριση φορέα, προθεσμίες και προσωπικές υποθέσεις, επικοινώνησε με τον υπεύθυνο.</p><strong>Γεώργιος Σοφιανίδης</strong><a href="mailto:gsofianidis@mitropolitiko.edu.gr">gsofianidis@mitropolitiko.edu.gr</a><a href="tel:+302314409000">2314 409000</a></section>
+        <section id="campus-contact" class="help-card"><span aria-hidden="true">↗</span><h2>Υπεύθυνος πρακτικής</h2><p id="campus-contact-hint" aria-live="polite">Επίλεξε το campus σου για να εμφανιστούν τα στοιχεία επικοινωνίας.</p><strong id="campus-contact-name"></strong><a id="campus-contact-link" hidden></a><span id="campus-contact-username" hidden></span></section>
       </aside>
     </div>
     <p class="notice">Ο οδηγός χρησιμοποιεί την υπάρχουσα βάση γνώσης του μαθήματος. Επιβεβαίωσε τις ημερομηνίες και τις απαιτήσεις για το τρέχον ακαδημαϊκό έτος στο Moodle ή με τον υπεύθυνο. Η υποβολή εγγράφων γίνεται στις επίσημες πλατφόρμες του κολλεγίου.</p>

@@ -1,8 +1,9 @@
 import {findAnswer} from './search.mjs?v=4';
-import {CHAT_API_BASE} from './chat-config.mjs?v=3';
+import {CHAT_API_BASE,CAMPUS_CONTACTS} from './chat-config.mjs?v=4';
 const $ = id => document.getElementById(id);
 let data = [];
 let aiReady=false, busy=false, conversation=[], activeRequest=null, generation=0;
+let campus='';
 function setBusy(value){busy=value;$('question').disabled=value;$('send').disabled=value;document.querySelectorAll('[data-question],#faq-list button,.choices button').forEach(button=>button.disabled=value);}
 function status(){ $('status').textContent=aiReady?'AI Groq ενεργό · Απαντήσεις με βάση το υλικό του μαθήματος':`${data.length} ερωτήσεις διαθέσιμες · Απαντήσεις από τη βάση γνώσης`; }
 function message(role, content, source) {
@@ -21,7 +22,7 @@ async function ask(question, selected) {
   message('user',question);
   $('question').value='';
   if(aiReady && !selected){
-    const turn=++generation;remember('user',question);setBusy(true);
+    const turn=++generation;remember('user',campus?`Campus του φοιτητή: ${campus}. Ερώτηση: ${question}`:question);setBusy(true);
     const pending=message('assistant','Ετοιμάζω απάντηση…');$('status').textContent='Το AI επεξεργάζεται την ερώτησή σου…';
     const controller=new AbortController();activeRequest=controller;const timer=setTimeout(()=>controller.abort(),25000);
     try{
@@ -54,7 +55,7 @@ async function ask(question, selected) {
     const choices=document.createElement('div'); choices.className='choices';
     for(const entry of result.matches){ const button=document.createElement('button'); button.type='button';button.textContent=entry.question;button.addEventListener('click',()=>ask(entry.question,entry));choices.append(button); }
     article.append(choices); $('messages').scrollTop=$('messages').scrollHeight;
-  } else message('assistant','Δεν βρήκα σαφή απάντηση στη βάση γνώσης. Δοκίμασε μια πιο συγκεκριμένη ερώτηση ή επίλεξε από τις συχνές ερωτήσεις. Για διευκρινίσεις: gsofianidis@mitropolitiko.edu.gr · 2314 409000.');
+  } else message('assistant','Δεν βρήκα σαφή απάντηση στη βάση γνώσης. Δοκίμασε μια πιο συγκεκριμένη ερώτηση ή επίλεξε από τις συχνές ερωτήσεις. Για θέματα πρακτικής, επίλεξε το campus σου και επικοινώνησε με τον υπεύθυνο που εμφανίζεται στην κάρτα επικοινωνίας.');
   $('question').value='';
 }
 function renderFaq(){
@@ -66,6 +67,21 @@ function renderFaq(){
 $('question-form').addEventListener('submit',event=>{event.preventDefault();ask($('question').value);});
 $('clear').addEventListener('click',()=>{generation++;activeRequest?.abort();activeRequest=null;conversation=[];setBusy(false);$('messages').replaceChildren();welcome();$('question').value='';if(data.length)status();else{$('question').disabled=true;$('send').disabled=true;}$('question').focus();});
 $('category').addEventListener('change',renderFaq);
+$('campus').replaceChildren(new Option('Επίλεξε campus για εξατομικευμένες απαντήσεις',''),...CAMPUS_CONTACTS.map(contact=>new Option(contact.campus,contact.campus)));
+function renderCampusContact(){
+  campus=$('campus').value;
+  if(campus) localStorage.setItem('se5117_campus',campus); else localStorage.removeItem('se5117_campus');
+  const contact=CAMPUS_CONTACTS.find(item=>item.campus===campus);
+  $('campus-contact-name').textContent=contact?.name||'';
+  $('campus-contact-hint').textContent=contact?'Υπεύθυνος πρακτικής για το campus '+contact.campus+'.': 'Επίλεξε το campus σου για να εμφανιστούν τα στοιχεία επικοινωνίας.';
+  const email=$('campus-contact-link'), username=$('campus-contact-username');
+  if(contact?.email){email.href=`mailto:${contact.email}`;email.textContent=contact.email;email.hidden=false;}else{email.removeAttribute('href');email.textContent='';email.hidden=true;}
+  username.textContent=contact?.username?`Στοιχείο επικοινωνίας: ${contact.username}`:'';username.hidden=!contact?.username;
+}
+$('campus').addEventListener('change',renderCampusContact);
+const savedCampus=localStorage.getItem('se5117_campus');
+if(CAMPUS_CONTACTS.some(contact=>contact.campus===savedCampus)) $('campus').value=savedCampus;
+renderCampusContact();
 for(const button of document.querySelectorAll('[data-question]')) button.addEventListener('click',()=>ask(button.dataset.question));
 async function load(state={configured:false}){
   try {

@@ -13,10 +13,10 @@ test('Answer text provides details missing from question titles and keywords',()
   const ids=select([{role:'user',content:'Βάζω τελεία στο πεδίο αριθμός έγκριτης απόφασης;'}]);assert.ok(ids.includes(24));
 });
 test('A new topic does not inherit unrelated contact questions',()=>{
-  const ids=select([{role:'user',content:'Ποιος είναι ο υπεύθυνος της πρακτικής;'},{role:'assistant',content:'Γεώργιος Σοφιανίδης, gsofianidis@mitropolitiko.edu.gr'},{role:'user',content:'Πόσες ώρες πρακτικής χρειάζομαι;'}]);assert.equal(ids[0],4);assert.equal(ids.includes(40),false);assert.equal(ids.includes(41),false);
+  const ids=select([{role:'user',content:'Ποιος είναι ο υπεύθυνος της πρακτικής;'},{role:'assistant',content:'Μαρία Πάππα, mpappa8@mitropolitiko.edu.gr'},{role:'user',content:'Πόσες ώρες πρακτικής χρειάζομαι;'}]);assert.equal(ids[0],4);assert.equal(ids.includes(40),false);assert.equal(ids.includes(41),false);
 });
 test('A pronoun follow-up retains the previous contact context',()=>{
-  const ids=select([{role:'user',content:'Ποιος είναι ο υπεύθυνος της πρακτικής;'},{role:'assistant',content:'Γεώργιος Σοφιανίδης'},{role:'user',content:'Και ποιο είναι το email του;'}]);assert.ok(ids.includes(11));
+  const ids=select([{role:'user',content:'Ποιος είναι ο υπεύθυνος της πρακτικής;'},{role:'assistant',content:'Μαρία Πάππα'},{role:'user',content:'Και ποιο είναι το email του;'}]);assert.ok(ids.includes(11));
 });
 test('Multiple requested topics are included without unbounded context',()=>{
   const ids=select([{role:'user',content:'Τι δικαιολογητικά χρειάζομαι και πού τα ανεβάζω;'}]);assert.ok(ids.includes(2));assert.ok(ids.includes(31));assert.ok(ids.length<=5);
