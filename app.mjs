@@ -1,4 +1,4 @@
-import {findAnswer} from './search.mjs?v=2';
+import {findAnswer} from './search.mjs?v=4';
 import {CHAT_API_BASE} from './chat-config.mjs?v=3';
 const $ = id => document.getElementById(id);
 let data = [];
@@ -27,7 +27,7 @@ async function ask(question, selected) {
     try{
       const response=await fetch(`${CHAT_API_BASE}/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:conversation}),signal:controller.signal,credentials:'omit'});
       if(!response.ok)throw new Error('AI unavailable');const result=await response.json();if(typeof result.answer!=='string'||!result.answer.trim())throw new Error('Empty AI answer');
-      if(turn!==generation)return;pending.remove();message('assistant',result.answer,{label:'Απάντηση AI · Groq'+(result.sources?.length?` · Υλικό μαθήματος: ερωτήσεις ${result.sources.map(source=>source.id).join(', ')}`:'')});remember('assistant',result.answer);return;
+      if(turn!==generation)return;pending.remove();message('assistant',result.answer,{label:'Απάντηση AI · Groq'+(result.sources?.length?` · Σχετικές ενότητες: ${[...new Set(result.sources.map(source=>source.category))].join(' · ')}`:'')});remember('assistant',result.answer);return;
     }catch{
       if(turn!==generation)return;pending.remove();conversation.pop();message('assistant','Το AI δεν είναι διαθέσιμο αυτή τη στιγμή. Θα προσπαθήσω να σε βοηθήσω από τις έτοιμες απαντήσεις.');
     }finally{clearTimeout(timer);if(turn===generation){activeRequest=null;setBusy(false);status();}}

@@ -24,7 +24,9 @@ jobs:
       - name: Test knowledge search
         run: node --test tests/search.test.mjs
       - name: Test Groq backend
-        run: node --test backend/tests/chat.test.mjs
+        run: |
+          python3 scripts/sync_backend.py
+          node --test backend/tests/*.test.mjs
       - name: Stage static website
         run: python3 scripts/build_site.py
       - uses: actions/configure-pages@v5

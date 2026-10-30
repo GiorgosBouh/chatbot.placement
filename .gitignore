@@ -8,3 +8,6 @@ __pycache__/
 llm-backend/.sites-runtime/
 llm-backend/dist/
 llm-backend/site.tar.gz
+backend/worker/qa_data.json
+backend/worker/search.mjs
+backend/worker/retrieval-cases.json
