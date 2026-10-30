@@ -1,5 +1,6 @@
 // Search only the curated knowledge base; never invent an answer.
 export const normalize = value => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/ς/g, 'σ').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+export const needsFrameworkClarification = value => normalize(value).split(' ').some(word => word.startsWith('πλαισι'));
 const stop = new Set(normalize('τι πως που ποιο ποιος ποια ποιες ποιοι ποιον ποιας πότε μπορω μπορει μπορουμε να σε για την τη το τον τα του της τους τις των μου με μας και η ο οι ενα μια εναν απο ως αν δεν εχω ειναι θα πρεπει κανω κανει κανετε χρειαζομαι χρειάζεται παιρνω γινεται σχετικα πρακτικη πρακτικης ασκηση ασκησης θελω θελει εγω εσεις αυτο ειναι καθε αλλά ποτέ πριν μετα αυριο').split(' '));
 const groups = [
  ['ωρα','ωρες','ωρων'], ['εγγραφα','εγγραφο','εγγραφων','δικαιολογητικα','χαρτια'],

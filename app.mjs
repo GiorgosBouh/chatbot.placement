@@ -1,4 +1,4 @@
-import {findAnswer} from './search.mjs?v=4';
+import {findAnswer,needsFrameworkClarification} from './search.mjs?v=5';
 import {CHAT_API_BASE,CAMPUS_CONTACTS} from './chat-config.mjs?v=4';
 const $ = id => document.getElementById(id);
 let data = [];
@@ -21,6 +21,13 @@ async function ask(question, selected) {
   question=question.trim(); if (!question || !data.length || busy) return;
   message('user',question);
   $('question').value='';
+  if(needsFrameworkClarification(question)){
+    const clarification='Όταν λες «πλαίσια», εννοείς τους φορείς/δομές όπου μπορείς να πραγματοποιήσεις πρακτική άσκηση ή κάτι άλλο;';
+    message('assistant',clarification);
+    remember('user',campus?`Campus του φοιτητή: ${campus}. Ερώτηση: ${question}`:question);
+    remember('assistant',clarification);
+    return;
+  }
   if(aiReady && !selected){
     const turn=++generation;remember('user',campus?`Campus του φοιτητή: ${campus}. Ερώτηση: ${question}`:question);setBusy(true);
     const pending=message('assistant','Ετοιμάζω απάντηση…');$('status').textContent='Το AI επεξεργάζεται την ερώτησή σου…';
