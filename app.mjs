@@ -26,10 +26,21 @@ async function ask(question, selected) {
     const controller=new AbortController();activeRequest=controller;const timer=setTimeout(()=>controller.abort(),25000);
     try{
       const response=await fetch(`${CHAT_API_BASE}/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:conversation}),signal:controller.signal,credentials:'omit'});
-      if(!response.ok)throw new Error('AI unavailable');const result=await response.json();if(typeof result.answer!=='string'||!result.answer.trim())throw new Error('Empty AI answer');
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(result.error||'AI unavailable');
+      if(typeof result.answer!=='string'||!result.answer.trim())throw new Error('Empty AI answer');
       if(turn!==generation)return;pending.remove();message('assistant',result.answer,{label:'Απάντηση AI · Groq'+(result.sources?.length?` · Σχετικές ενότητες: ${[...new Set(result.sources.map(source=>source.category))].join(' · ')}`:'')});remember('assistant',result.answer);return;
-    }catch{
-      if(turn!==generation)return;pending.remove();conversation.pop();message('assistant','Το AI δεν είναι διαθέσιμο αυτή τη στιγμή. Θα προσπαθήσω να σε βοηθήσω από τις έτοιμες απαντήσεις.');
+    }catch(error){
+      if(turn!==generation)return;pending.remove();conversation.pop();
+      if(error.message==='rate_limited'){
+        message('assistant','Έφτασες το προσωρινό όριο αιτημάτων του chat. Περίμενε περίπου ένα λεπτό και δοκίμασε ξανά.');
+        return;
+      }
+      if(error.message==='provider_rate_limited'){
+        message('assistant','Το AI έφτασε προσωρινά το όριο χρήσης του Groq. Δοκίμασε ξανά αργότερα, όταν ανανεωθεί το όριο του λογαριασμού.');
+        return;
+      }
+      message('assistant','Το AI δεν είναι διαθέσιμο αυτή τη στιγμή. Θα προσπαθήσω να σε βοηθήσω από τις έτοιμες απαντήσεις.');
     }finally{clearTimeout(timer);if(turn===generation){activeRequest=null;setBusy(false);status();}}
   }
   const result=selected ? {kind:'answer',entry:selected} : findAnswer(question,data);
