@@ -85,7 +85,7 @@ renderCampusContact();
 for(const button of document.querySelectorAll('[data-question]')) button.addEventListener('click',()=>ask(button.dataset.question));
 async function load(state={configured:false}){
   try {
-    const response=await fetch('./qa_data.json');if(!response.ok) throw new Error('Knowledge base unavailable');
+    const response=await fetch('./qa_data.json?v=2',{cache:'no-store'});if(!response.ok) throw new Error('Knowledge base unavailable');
     const entries=await response.json();
     if(!Array.isArray(entries)||!entries.length||!entries.every(entry=>Number.isInteger(entry.id)&&typeof entry.question==='string'&&typeof entry.answer==='string'&&typeof entry.category==='string'&&Array.isArray(entry.keywords))) throw new Error('Invalid knowledge base');
     data=entries;
