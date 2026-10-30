@@ -41,7 +41,7 @@ async function ask(question, selected) {
         return;
       }
       if(error.message==='provider_quota_exceeded'){
-        message('assistant','Το μηνιαίο όριο χρήσης του AI για αυτή την εφαρμογή έχει εξαντληθεί. Το chat θα λειτουργήσει ξανά όταν ανανεωθεί ή αυξηθεί το όριο του λογαριασμού Groq.');
+        message('assistant','Δεν μπορώ να απαντήσω αυτή τη στιγμή. Ξαναδοκιμάστε σε λίγο.');
         return;
       }
       message('assistant','Το AI δεν είναι διαθέσιμο αυτή τη στιγμή. Θα προσπαθήσω να σε βοηθήσω από τις έτοιμες απαντήσεις.');
