@@ -55,7 +55,9 @@ export function createHandler(knowledge, rank) {
         let providerCode='unknown';
         try {const detail=await upstream.json();providerCode=String(detail?.error?.code||detail?.error?.type||'unknown').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,80);} catch {}
         console.error('Groq request failed',upstream.status,providerCode);
-        return reply({error:upstream.status===429?'provider_rate_limited':upstream.status===401?'provider_authentication':'provider_unavailable',upstream_status:upstream.status,provider_code:providerCode},upstream.status===429?429:502);
+        const quotaExceeded=['blocked_api_access','insufficient_quota','spend_limit_exceeded'].includes(providerCode);
+        const rateLimited=upstream.status===429;
+        return reply({error:quotaExceeded?'provider_quota_exceeded':rateLimited?'provider_rate_limited':upstream.status===401?'provider_authentication':'provider_unavailable',upstream_status:upstream.status,provider_code:providerCode},quotaExceeded||rateLimited?429:502);
       }
       const result=await upstream.json(); const answer=result?.choices?.[0]?.message?.content;
       if(typeof answer!=='string'||!answer.trim()) return reply({error:'empty_response'},502);

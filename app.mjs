@@ -40,6 +40,10 @@ async function ask(question, selected) {
         message('assistant','Το AI έφτασε προσωρινά το όριο χρήσης του Groq. Δοκίμασε ξανά αργότερα, όταν ανανεωθεί το όριο του λογαριασμού.');
         return;
       }
+      if(error.message==='provider_quota_exceeded'){
+        message('assistant','Το μηνιαίο όριο χρήσης του AI για αυτή την εφαρμογή έχει εξαντληθεί. Το chat θα λειτουργήσει ξανά όταν ανανεωθεί ή αυξηθεί το όριο του λογαριασμού Groq.');
+        return;
+      }
       message('assistant','Το AI δεν είναι διαθέσιμο αυτή τη στιγμή. Θα προσπαθήσω να σε βοηθήσω από τις έτοιμες απαντήσεις.');
     }finally{clearTimeout(timer);if(turn===generation){activeRequest=null;setBusy(false);status();}}
   }
