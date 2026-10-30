@@ -3,6 +3,7 @@ import {CHAT_API_BASE} from './chat-config.mjs?v=3';
 const $ = id => document.getElementById(id);
 let data = [];
 let aiReady=false, busy=false, conversation=[], activeRequest=null, generation=0;
+let accessCode='';
 function setBusy(value){busy=value;$('question').disabled=value;$('send').disabled=value;document.querySelectorAll('[data-question],#faq-list button,.choices button').forEach(button=>button.disabled=value);}
 function status(){ $('status').textContent=aiReady?'AI Groq ενεργό · Απαντήσεις με βάση το υλικό του μαθήματος':`${data.length} ερωτήσεις διαθέσιμες · Απαντήσεις από τη βάση γνώσης`; }
 function message(role, content, source) {
@@ -25,7 +26,7 @@ async function ask(question, selected) {
     const pending=message('assistant','Ετοιμάζω απάντηση…');$('status').textContent='Το AI επεξεργάζεται την ερώτησή σου…';
     const controller=new AbortController();activeRequest=controller;const timer=setTimeout(()=>controller.abort(),25000);
     try{
-      const response=await fetch(`${CHAT_API_BASE}/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:conversation}),signal:controller.signal,credentials:'omit'});
+      const response=await fetch(`${CHAT_API_BASE}/chat`,{method:'POST',headers:{'Content-Type':'application/json','X-App-Code':accessCode},body:JSON.stringify({messages:conversation}),signal:controller.signal,credentials:'omit'});
       const result=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(result.error||'AI unavailable');
       if(typeof result.answer!=='string'||!result.answer.trim())throw new Error('Empty AI answer');
@@ -67,8 +68,7 @@ $('question-form').addEventListener('submit',event=>{event.preventDefault();ask(
 $('clear').addEventListener('click',()=>{generation++;activeRequest?.abort();activeRequest=null;conversation=[];setBusy(false);$('messages').replaceChildren();welcome();$('question').value='';if(data.length)status();else{$('question').disabled=true;$('send').disabled=true;}$('question').focus();});
 $('category').addEventListener('change',renderFaq);
 for(const button of document.querySelectorAll('[data-question]')) button.addEventListener('click',()=>ask(button.dataset.question));
-welcome();
-async function load(){
+async function load(state){
   try {
     const response=await fetch('./qa_data.json');if(!response.ok) throw new Error('Knowledge base unavailable');
     const entries=await response.json();
@@ -76,17 +76,38 @@ async function load(){
     data=entries;
     for(const category of [...new Set(data.map(entry=>entry.category))].sort((a,b)=>a.localeCompare(b,'el'))){const option=document.createElement('option');option.value=category;option.textContent=category;$('category').append(option);}
     renderFaq();document.querySelectorAll('button[disabled],input[disabled],select[disabled]').forEach(element=>element.disabled=false);
+    aiReady=state.configured===true;
     status();
-    if(CHAT_API_BASE){
-      try{
-        const health=await fetch(`${CHAT_API_BASE}/status`,{signal:AbortSignal.timeout(5000),credentials:'omit'});
-        if(health.ok){const state=await health.json();aiReady=state.configured===true;}
-      }catch{aiReady=false;}
-      status();
-    }
   }catch(error){
     $('status').textContent='Η βάση γνώσης δεν φορτώθηκε. Ανανέωσε τη σελίδα για νέα προσπάθεια.';$('status').classList.add('error');
     message('assistant','Προσωρινά δεν είναι διαθέσιμη η αναζήτηση. Μπορείς να επικοινωνήσεις με τον υπεύθυνο από τον σύνδεσμο επικοινωνίας.');
   }
 }
-load();
+$('access-form').addEventListener('submit',async event=>{
+  event.preventDefault();
+  const code=$('access-code').value.trim();
+  if(!code||busy)return;
+  $('access-submit').disabled=true;
+  $('access-status').textContent='Έλεγχος κωδικού…';
+  try{
+    const response=await fetch(`${CHAT_API_BASE}/status`,{headers:{'X-App-Code':code},signal:AbortSignal.timeout(8000),credentials:'omit'});
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok){
+      sessionStorage.removeItem('se5117_access_code');
+      $('access-status').textContent=result.error==='access_rate_limited'?'Έγιναν πολλές προσπάθειες. Δοκίμασε ξανά σε ένα λεπτό.':response.status===403?'Ο κωδικός δεν είναι σωστός. Δοκίμασε ξανά.':'Δεν ήταν δυνατός ο έλεγχος του κωδικού. Δοκίμασε ξανά.';
+      $('access-code').value='';
+      return;
+    }
+    accessCode=code;
+    sessionStorage.setItem('se5117_access_code',code);
+    $('access-gate').hidden=true;
+    $('site-content').hidden=false;
+    welcome();
+    await load(result);
+    $('question').focus();
+  }catch{
+    $('access-status').textContent='Δεν ήταν δυνατή η σύνδεση. Έλεγξε το διαδίκτυο και δοκίμασε ξανά.';
+  }finally{$('access-submit').disabled=false;}
+});
+const savedCode=sessionStorage.getItem('se5117_access_code');
+if(savedCode){$('access-code').value=savedCode;$('access-form').requestSubmit();}

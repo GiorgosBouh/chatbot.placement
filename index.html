@@ -7,9 +7,29 @@
   <meta name="theme-color" content="#123c35">
   <title>Πρακτική Άσκηση · Οδηγός Φοιτητή</title>
   <link rel="stylesheet" href="./styles.css">
-  <script type="module" src="./app.mjs?v=6"></script>
+  <style>
+    .access-gate{min-height:100vh;display:grid;place-items:center;padding:24px}
+    .access-card{width:min(100%,390px);display:grid;gap:14px;padding:32px;background:#fff;border:1px solid #dce4df;border-radius:18px;box-shadow:0 12px 36px #15392b0c}
+    .access-card .eyebrow{margin:0}.access-card h1{font-size:28px;margin:0}.access-card .lead{font-size:13px}
+    .access-card input{width:100%;min-height:46px;padding:10px 13px;border:1px solid #cad5cc;border-radius:9px;background:#f9faf7}
+    .access-card button{min-height:44px;padding:10px 14px;border:0;border-radius:8px;background:#123c35;color:#d9efb7;font-weight:700}
+    .access-status{min-height:18px;margin:0;color:#9d3a25;font-size:12px;line-height:1.5}
+  </style>
+  <script type="module" src="./app.mjs?v=7"></script>
 </head>
 <body>
+  <section id="access-gate" class="access-gate" aria-labelledby="access-title">
+    <form id="access-form" class="access-card">
+      <p class="eyebrow">SE5117 · ΟΔΗΓΟΣ ΠΡΑΚΤΙΚΗΣ</p>
+      <h1 id="access-title">Εισαγωγή κωδικού</h1>
+      <p class="lead">Πληκτρολόγησε τον κωδικό πρόσβασης για να συνεχίσεις.</p>
+      <label class="sr-only" for="access-code">Κωδικός πρόσβασης</label>
+      <input id="access-code" name="code" type="password" inputmode="numeric" autocomplete="current-password" placeholder="Κωδικός πρόσβασης" required>
+      <button id="access-submit" type="submit">Συνέχεια</button>
+      <p id="access-status" class="access-status" role="status" aria-live="polite"></p>
+    </form>
+  </section>
+  <div id="site-content" hidden>
   <header class="topbar">
     <a class="brand" href="./"><span class="brand-icon" aria-hidden="true">Π</span><span>Μητροπολιτικό Κολλέγιο<small>Θεσσαλονίκη · Προπονητική & Φυσική Αγωγή</small></span></a>
     <a class="contact" href="mailto:gsofianidis@mitropolitiko.edu.gr">Επικοινωνία με υπεύθυνο ↗</a>
@@ -55,5 +75,6 @@
     <p class="notice">Ο οδηγός χρησιμοποιεί την υπάρχουσα βάση γνώσης του μαθήματος. Επιβεβαίωσε τις ημερομηνίες και τις απαιτήσεις για το τρέχον ακαδημαϊκό έτος στο Moodle ή με τον υπεύθυνο. Η υποβολή εγγράφων γίνεται στις επίσημες πλατφόρμες του κολλεγίου.</p>
   </main>
   <footer><span>Πρακτική Άσκηση · SE5117</span><a href="https://github.com/GiorgosBouh/chatbot.placement">Κώδικας & βάση γνώσης ↗</a></footer>
+  </div>
 </body>
 </html>

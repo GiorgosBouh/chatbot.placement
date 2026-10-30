@@ -13,6 +13,24 @@ export function createHandler(knowledge, rank) {
   // Best-effort burst protection per Worker isolate; provider quotas remain the
   // account-wide limit. No conversation text or IP is written to persistent storage.
   const windows = new Map();
+  const accessAttempts = new Map();
+  function sameSecret(candidate, expected) {
+    const left=new TextEncoder().encode(candidate||''), right=new TextEncoder().encode(expected||'');
+    let mismatch=left.length^right.length;
+    for(let i=0;i<Math.max(left.length,right.length);i++) mismatch|=(left[i]||0)^(right[i]||0);
+    return mismatch===0;
+  }
+  function accessError(request, env) {
+    if(!env.APP_ACCESS_CODE) return {error:'access_not_configured',status:503};
+    const minute=Math.floor(Date.now()/60000);
+    for(const [key,value] of accessAttempts) if(value.minute!==minute) accessAttempts.delete(key);
+    const ip=request.headers.get('cf-connecting-ip')||'unknown', current=accessAttempts.get(ip)||{minute,count:0};
+    if(current.count>=5) return {error:'access_rate_limited',status:429};
+    accessAttempts.set(ip,{minute,count:current.count+1});
+    if(!sameSecret(request.headers.get('x-app-code'),env.APP_ACCESS_CODE)) return {error:'invalid_access_code',status:403};
+    accessAttempts.delete(ip);
+    return null;
+  }
   function quota(request) {
     const now = Math.floor(Date.now()/60000);
     for(const [key,value] of windows) if(value.minute!==now) windows.delete(key);
@@ -29,7 +47,11 @@ export function createHandler(knowledge, rank) {
     if(allowed) headers['Access-Control-Allow-Origin']=origin;
     const reply=(data,status=200,extra={})=>new Response(JSON.stringify(data),{status,headers:{...headers,...extra}});
     if(origin && !allowed) return reply({error:'origin_not_allowed'},403);
-    if(request.method==='OPTIONS') return allowed ? new Response(null,{status:204,headers:{...headers,'Access-Control-Allow-Methods':'GET, POST, OPTIONS','Access-Control-Allow-Headers':'Content-Type','Access-Control-Max-Age':'600'}}) : reply({error:'origin_required'},403);
+    if(request.method==='OPTIONS') return allowed ? new Response(null,{status:204,headers:{...headers,'Access-Control-Allow-Methods':'GET, POST, OPTIONS','Access-Control-Allow-Headers':'Content-Type, X-App-Code','Access-Control-Max-Age':'600'}}) : reply({error:'origin_required'},403);
+    if(url.pathname==='/'||url.pathname==='/status'||url.pathname==='/chat'){
+      const denied=accessError(request,env);
+      if(denied) return reply({error:denied.error},denied.status,denied.status===429?{'Retry-After':'60'}:{});
+    }
     if(request.method==='GET' && (url.pathname==='/status' || url.pathname==='/')) return reply({service:'SE5117 Groq backend',configured:!!env.GROQ_API_KEY,model:env.GROQ_MODEL||'openai/gpt-oss-20b'});
     if(url.pathname!=='/chat') return reply({error:'not_found'},404);
     if(request.method!=='POST') return reply({error:'method_not_allowed'},405,{Allow:'POST'});
